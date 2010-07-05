@@ -25,10 +25,9 @@ import com.vaadin.ui.Button;
 import com.vaadin.ui.TextField;
 import com.vaadin.ui.Window;
 import org.vaadin.peter.imagestrip.ImageStrip;
+import pt.inevo.encontra.convert.SVGConverter;
 
-import javax.imageio.ImageIO;
 import java.awt.*;
-import java.awt.image.BufferedImage;
 import java.io.*;
 import java.util.ArrayList;
 
@@ -37,6 +36,7 @@ public class EnContRAApplication extends Application {
 
     @Override
     public void init() {
+
         Window main = new Window("EnContRA");
         setMainWindow(main);
 
@@ -49,7 +49,7 @@ public class EnContRAApplication extends Application {
         ColorPicker cp = new ColorPicker("Our ColorPicker", Color.BLACK);
         cp.addListener(new ColorPicker.ColorChangeListener() {
             public void colorChanged(ColorChangeEvent event) {
-                //canvas.setColor(event.getColor());
+                canvas.setColor(event.getColor());
                 getMainWindow().showNotification("Color changed!");
             }
         });

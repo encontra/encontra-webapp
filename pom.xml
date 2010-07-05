@@ -152,6 +152,11 @@
 
     <dependencies>
         <dependency>
+            <groupId>pt.inevo.encontra</groupId>
+            <artifactId>encontra-convert-svg</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
             <groupId>com.vaadin</groupId>
             <artifactId>vaadin</artifactId>
             <version>6.3.1</version>
@@ -189,16 +194,8 @@
             <version>2.0.3</version>
             <scope>provided</scope>
         </dependency>
-        <dependency>
-            <groupId>org.apache.xmlgraphics</groupId>
-            <artifactId>batik-transcoder</artifactId>
-            <version>1.7</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.xmlgraphics</groupId>
-            <artifactId>batik-codec</artifactId>
-            <version>1.7</version>
-        </dependency>
+
+
     </dependencies>
 
 </project>

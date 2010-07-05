@@ -19,6 +19,7 @@ package pt.inevo.encontra;
 import java.awt.*;
 import java.util.Map;
 
+import com.vaadin.ui.AbstractComponent;
 import com.vaadin.ui.AbstractField;
 import pt.inevo.encontra.gwt.client.ui.VSVGCanvas;
 
@@ -28,24 +29,19 @@ import com.vaadin.ui.ClientWidget;
 
 @SuppressWarnings("serial")
 @ClientWidget(VSVGCanvas.class)
-public class SVGCanvas extends AbstractField {
+public class SVGCanvas extends AbstractComponent {
+
+    private Color color=Color.BLACK;
+    private String svg;
 
     public SVGCanvas() {
         super();
-        setValue(new String("white"));
     }
 
-    /** The property value of the field is a String. */
-    @Override
-    public Class<?> getType() {
-        return String.class;
-    }
 
    /** Set the currently selected color. */
     public void setSVG(String newsvg) {
-        // Setting the property will automatically cause
-        // repainting of the component with paintContent().
-        setValue(newsvg);
+        this.svg=newsvg;
     }
 
     /** Paint (serialize) the component for the client. */
@@ -56,11 +52,13 @@ public class SVGCanvas extends AbstractField {
        // Add the currently selected color as a variable in
         // the paint target.
         target.addVariable(this, "svg", getSVG());
-        //target.addVariable(this, "color", getColor());
+
+        target.addVariable(this,"color", "#"+Integer.toHexString(color.getRed()) + Integer.toHexString(color.getGreen()) + Integer.toHexString(color.getBlue()));
+
     }
 
     public String getSVG() {
-        String svg=(String) getValue();
+
         // The SVG does not include a root namespace declaration....
         String doctype="<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\"\n" +
                             " \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n";
@@ -74,16 +72,18 @@ public class SVGCanvas extends AbstractField {
         // Sets the currently selected color
         if (variables.containsKey("svg") && !isReadOnly()) {
             final String newValue = (String) variables.get("svg");
-            // Changing the property of the component will
-            // trigger a ValueChangeEvent
-            setValue(newValue, true);
+            setSVG(newValue);
         }
-    }
-
-    public void setColor() {
         
     }
-    //public Color getColor() {
-        //return color;
-    //}
+
+
+    
+    public void setColor( Color color) {
+        this.color=color;
+       requestRepaint(); 
+    }
+    public Color getColor() {
+        return color;
+    }
 }

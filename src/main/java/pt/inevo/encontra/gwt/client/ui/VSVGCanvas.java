@@ -34,6 +34,8 @@ public class VSVGCanvas extends Composite implements Paintable, MouseDownHandler
     Console log=ApplicationConnection.getConsole();
     private DrawingArea canvas;
 
+    private String color="#000000";
+
     private int width = 400;
     private int height = 400;
 
@@ -56,7 +58,7 @@ public class VSVGCanvas extends Composite implements Paintable, MouseDownHandler
         super();
         AbsolutePanel panel = new AbsolutePanel();
 
-        
+
         canvas = new DrawingArea(width, height);
 
         canvas.addMouseDownHandler(this);
@@ -66,10 +68,6 @@ public class VSVGCanvas extends Composite implements Paintable, MouseDownHandler
         canvas.addMouseUpHandler(this);
         
         initWidget(canvas);
-
-
-
-
 
         setStyleName(CLASSNAME);
         DOM.setStyleAttribute(canvas.getElement(), "border", "1px solid black");
@@ -99,6 +97,12 @@ public class VSVGCanvas extends Composite implements Paintable, MouseDownHandler
         uidlId = uidl.getId();
 
         log.log("updateFromUIDL");
+
+
+
+        color=uidl.getStringVariable("color");
+        log.log("Color = "+color);
+
         //canvas.clear();
 
 
@@ -137,6 +141,7 @@ public class VSVGCanvas extends Composite implements Paintable, MouseDownHandler
         log.log("MouseDown "+event.getX()+","+event.getY());
         path=new Path(event.getX(),event.getY());
         path.setFillColor("none");
+        path.setStrokeColor(color);
         canvas.add(path);
 
         Element relativeElem = event.getRelativeElement();

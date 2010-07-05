@@ -16,7 +16,7 @@
         </init-param>
         <init-param>
             <param-name>widgetset</param-name>
-            <param-value>pt.inevo.encontra.gwt.CanvasWidgetSet</param-value>
+            <param-value>pt.inevo.encontra.gwt.WidgetSet</param-value>
         </init-param>
     </servlet>
     <servlet-mapping>
