@@ -19,6 +19,7 @@ package pt.inevo.encontra;
 import com.vaadin.Application;
 import com.vaadin.addon.colorpicker.ColorPicker;
 import com.vaadin.addon.colorpicker.events.ColorChangeEvent;
+import com.vaadin.data.Property;
 import com.vaadin.terminal.FileResource;
 import com.vaadin.ui.*;
 import com.vaadin.ui.Button;
@@ -26,6 +27,10 @@ import com.vaadin.ui.TextField;
 import com.vaadin.ui.Window;
 import org.vaadin.peter.imagestrip.ImageStrip;
 import pt.inevo.encontra.convert.SVGConverter;
+import pt.inevo.encontra.geometry.PolygonSet;
+import pt.inevo.encontra.geometry.Polygon;
+import pt.inevo.encontra.service.PolygonDetectionService;
+import pt.inevo.encontra.service.impl.PolygonDetectionServiceImpl;
 
 import java.awt.*;
 import java.io.*;
@@ -57,6 +62,20 @@ public class EnContRAApplication extends Application {
         canvasLayout.addComponent(cp);
         canvasLayout.addComponent(canvas);
 
+        final PolygonDetectionService service=new PolygonDetectionServiceImpl();
+
+        canvas.addListener(new Property.ValueChangeListener(){
+
+            public void valueChange(Property.ValueChangeEvent valueChangeEvent) {
+                SVGCanvas c=(SVGCanvas)valueChangeEvent.getProperty();
+                String svg=c.getSVG();
+                PolygonSet polygons=service.detectPolygons(svg);
+                // draw polylines
+                for (Polygon p : polygons) {
+                    System.out.println(p.AsString(true,"#000000","none"));
+                }
+            }
+        });
         final ImageUploader uploader = new ImageUploader();
 
 
@@ -76,18 +95,18 @@ public class EnContRAApplication extends Application {
 
         final ImageStrip strip=new ImageStrip(ImageStrip.Alignment.HORIZONTAL);
         root.addComponent(strip);
-        
+
         b.addListener(new Button.ClickListener() {
             public void buttonClick(Button.ClickEvent clickEvent) {
                 File file = null;
                 strip.removeAllImages();
-                
+
                 if(tabsheet.getSelectedTab().equals(canvasLayout)) {  // SKETCH
                     String svg=canvas.getSVG();
                     try {
                         file = File.createTempFile("encontra",".jpg");
                         new SVGConverter().convertToMimeType("image/jpeg",new ByteArrayInputStream(svg.getBytes()),new FileOutputStream(file));
-                        
+
                     } catch (IOException e) {
                         e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
                     }
@@ -98,7 +117,7 @@ public class EnContRAApplication extends Application {
 
                 if(file!=null) {
 
-                        //BufferedImage img= ImageIO.read(file);
+                    //BufferedImage img= ImageIO.read(file);
 
                     ArrayList<File> images=new ArrayList<File>();
                     for(int i=0;i<10;i++)
@@ -108,13 +127,13 @@ public class EnContRAApplication extends Application {
                     strip.setMaxAllowed(10);
                     strip.setAnimated(true);
 
-                    
+
                     int i=0;
                     for(File img : images) {
                         strip.addImage(
-                            new FileResource(img, EnContRAApplication.this),"image_" + i++);
+                                new FileResource(img, EnContRAApplication.this),"image_" + i++);
                     }
-                    
+
                 }
             }
         });
