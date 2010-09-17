@@ -37,12 +37,10 @@ import pt.inevo.encontra.service.impl.PolygonDetectionServiceImpl;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.util.ArrayList;
 import java.util.Iterator;
 import javax.imageio.ImageIO;
 import pt.inevo.encontra.descriptors.CompositeDescriptor;
 import pt.inevo.encontra.descriptors.CompositeDescriptorExtractor;
-import pt.inevo.encontra.descriptors.Descriptor;
 import pt.inevo.encontra.engine.Engine;
 import pt.inevo.encontra.engine.SimpleEngine;
 import pt.inevo.encontra.engine.SimpleIndexedObjectFactory;
@@ -58,153 +56,14 @@ import pt.inevo.encontra.index.ResultSet;
 import pt.inevo.encontra.index.SimpleIndex;
 import pt.inevo.encontra.lucene.index.LuceneIndex;
 import pt.inevo.encontra.nbtree.index.BTreeIndex;
-import pt.inevo.encontra.nbtree.index.NBTreeSearcher;
 import pt.inevo.encontra.query.KnnQuery;
 import pt.inevo.encontra.query.Query;
-import pt.inevo.encontra.storage.EntityStorage;
-import pt.inevo.encontra.storage.IEntry;
 import pt.inevo.encontra.storage.SimpleObjectStorage;
 
 public class EnContRAApplication extends Application {
-
-    public static class FileUtil {
-
-        private static boolean hasExtension(File f, String[] extensions) {
-            int sz = extensions.length;
-            String ext;
-            String name = f.getName();
-            for (int i = 0; i < sz; i++) {
-                ext = (String) extensions[i];
-                if (name.endsWith(ext)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        public static java.util.List<File> findFilesRecursively(File directory, String[] extensions) {
-            java.util.List<File> list = new ArrayList<File>();
-            if (directory.isFile()) {
-                if (hasExtension(directory, extensions)) {
-                    list.add(directory);
-                }
-                return list;
-            }
-            addFilesRecursevely(list, directory, extensions);
-            return list;
-        }
-
-        private static void addFilesRecursevely(java.util.List<File> found, File rootDir, String[] extensions) {
-            if (rootDir == null) {
-                return; // we do not want waste time
-            }
-            File[] files = rootDir.listFiles();
-            if (files == null) {
-                return;
-            }
-            for (int i = 0; i < files.length; i++) {
-                File file = new File(rootDir, files[i].getName());
-                if (file.isDirectory()) {
-                    addFilesRecursevely(found, file, extensions);
-                } else {
-                    if (hasExtension(files[i], extensions)) {
-                        found.add(file);
-                    }
-                }
-            }
-        }
-    }
-
-    public static class ImageModelLoader implements Iterable<File> {
-
-        protected String imagesPath = "";
-        protected static Long idCount = 0l;
-        protected java.util.List<File> imagesFiles;
-
-        public ImageModelLoader() {
-        }
-
-        public ImageModelLoader(String imagesPath) {
-            this.imagesPath = imagesPath;
-        }
-
-        public static ImageModel loadImage(File image) {
-
-            //for now only sets the filename
-            ImageModel im = new ImageModel(image.getAbsolutePath(), "", null);
-            im.setId(idCount++);
-
-            //get the description
-            //TO DO - load the description from here
-            im.setDescription("Description: " + image.getAbsolutePath());
-
-            //get the bufferedimage
-            try {
-                BufferedImage bufImg = ImageIO.read(image);
-                im.setImage(bufImg);
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
-
-            return im;
-        }
-
-        public java.util.List<ImageModel> getImages(String path) {
-            File root = new File(path);
-            String[] extensions = {"jpg", "png"};
-
-            java.util.List<File> imageFiles = FileUtil.findFilesRecursively(root, extensions);
-            java.util.List<ImageModel> images = new ArrayList<ImageModel>();
-
-            for (File f : imageFiles) {
-                images.add(loadImage(f));
-            }
-
-            return images;
-        }
-
-        public void load(String path) {
-            File root = new File(path);
-            String[] extensions = {"jpg", "png"};
-
-            imagesFiles = FileUtil.findFilesRecursively(root, extensions);
-        }
-
-        public void load() {
-            load(imagesPath);
-        }
-
-        public java.util.List<ImageModel> getImages() {
-            return getImages(imagesPath);
-        }
-
-        @Override
-        public Iterator<File> iterator() {
-            return imagesFiles.iterator();
-        }
-    }
-
-    public class SimpleImageSearcher<O extends IndexedObject> extends NBTreeSearcher<O> {
-
-        @Override
-        public ResultSet<O> search(Query query) {
-            ResultSet<IEntry> results = new ResultSet<IEntry>();
-            if (supportsQueryType(query.getType())) {
-                if (query.getType().equals(Query.QueryType.KNN)) {
-                    KnnQuery q = (KnnQuery) query;
-                    IndexedObject o = (IndexedObject) q.getQuery();
-                    if (o.getValue() instanceof BufferedImage) {
-                        Descriptor d = getDescriptorExtractor().extract(o);
-                        results = performKnnQuery(d, q.getKnn());
-                    }
-                }
-            }
-
-            return getResultObjects(results);
-        }
-    }
+    
     private Engine<ImageModel> e = new SimpleEngine<ImageModel>();
-    private EntityStorage storage = new SimpleObjectStorage(ImageModel.class);
+
     private Window main = new Window("EnContRA");
     private ComboBox databaseSelector = new ComboBox("");
     private ComboBox indexSelector = new ComboBox();
@@ -310,55 +169,33 @@ public class EnContRAApplication extends Application {
                 SimpleImageSearcher imageSearcher = new SimpleImageSearcher();
 
                 //getting the descriptors
-//                CompositeDescriptorExtractor compositeImageDescriptorExtractor = new CompositeDescriptorExtractor(IndexedObject.class, null);
-//
-//                String[] selectedFeatures = featureSelectorProperty.toString().split(",");
-//                for (String feature : selectedFeatures) {
-//                    if (feature.contains("CEDD")) {
-////                        System.out.println("CEDD");
-//                        compositeImageDescriptorExtractor.addExtractor(new CEDDDescriptor<IndexedObject>(), 1);
-//                    } else if (feature.contains("ColorLayout")) {
-////                        System.out.println("ColorLayout");
-//                        compositeImageDescriptorExtractor.addExtractor(new ColorLayoutDescriptor<IndexedObject>(), 1);
-//                    } else if (feature.contains("Dominant Color")) {
-////                        System.out.println("DominantColor");
-//                        compositeImageDescriptorExtractor.addExtractor(new DominantColorDescriptor<IndexedObject>(), 1);
-//                    } else if (feature.contains("EdgeHistogram")) {
-////                        System.out.println("EdgeHistogram");
-//                        compositeImageDescriptorExtractor.addExtractor(new EdgeHistogramDescriptor<IndexedObject>(), 1);
-//                    } else if (feature.contains("FCTH")) {
-////                        System.out.println("FCTH");
-//                        compositeImageDescriptorExtractor.addExtractor(new FCTHDescriptor<IndexedObject>(), 1);
-//                    } else if (feature.contains("Scalable Color")) {
-////                        System.out.println("Scalable Color");
-//                        compositeImageDescriptorExtractor.addExtractor(new ScalableColorDescriptor(), 1);
-//                    }
-//                }
-//
-//                imageSearcher.setDescriptorExtractor(compositeImageDescriptorExtractor);
-//
-//                if (indexSelector.getValue().equals("Btree Index")) {
-//                    //using a BTreeIndex
-//                    imageSearcher.setIndex(new BTreeIndex(CompositeDescriptor.class));
-//                } else if (indexSelector.getValue().equals("Lucene Index")) {
-//                    //using a LuceneIndex
-//                    imageSearcher.setIndex(new LuceneIndex("LuceneIndex", CompositeDescriptor.class));
-//                } else {
-//                    //using a SimpleIndex
-//                    imageSearcher.setIndex(new SimpleIndex(CompositeDescriptor.class));
-//                }
+                CompositeDescriptorExtractor compositeImageDescriptorExtractor = new CompositeDescriptorExtractor(IndexedObject.class, null);
 
-                imageSearcher.setDescriptorExtractor(new ColorLayoutDescriptor<IndexedObject>());
+                String[] selectedFeatures = featureSelectorProperty.toString().split(",");
+                for (String feature : selectedFeatures) {
+                    if (feature.contains("CEDD")) {
+                        compositeImageDescriptorExtractor.addExtractor(new CEDDDescriptor<IndexedObject>(), 1);
+                    } else if (feature.contains("ColorLayout")) {
+                        compositeImageDescriptorExtractor.addExtractor(new ColorLayoutDescriptor<IndexedObject>(), 1);
+                    } else if (feature.contains("Dominant Color")) {
+                        compositeImageDescriptorExtractor.addExtractor(new DominantColorDescriptor<IndexedObject>(), 1);
+                    } else if (feature.contains("EdgeHistogram")) {
+                        compositeImageDescriptorExtractor.addExtractor(new EdgeHistogramDescriptor<IndexedObject>(), 1);
+                    } else if (feature.contains("FCTH")) {
+                        compositeImageDescriptorExtractor.addExtractor(new FCTHDescriptor<IndexedObject>(), 1);
+                    } else if (feature.contains("Scalable Color")) {
+                        compositeImageDescriptorExtractor.addExtractor(new ScalableColorDescriptor(), 1);
+                    }
+                }
 
-                if (indexSelector.getValue().equals("Btree Index")) {
-                    //using a BTreeIndex
-                    imageSearcher.setIndex(new BTreeIndex(ColorLayoutDescriptor.class));
-                } else if (indexSelector.getValue().equals("Lucene Index")) {
-                    //using a LuceneIndex
-                    imageSearcher.setIndex(new LuceneIndex("LuceneIndex", ColorLayoutDescriptor.class));
-                } else {
-                    //using a SimpleIndex
-                    imageSearcher.setIndex(new SimpleIndex(ColorLayoutDescriptor.class));
+                imageSearcher.setDescriptorExtractor(compositeImageDescriptorExtractor);
+
+                if (indexSelector.getValue().equals("Btree Index")) { //using a BTreeIndex
+                    imageSearcher.setIndex(new BTreeIndex(CompositeDescriptor.class));
+                } else if (indexSelector.getValue().equals("Lucene Index")) { //using a LuceneIndex
+                    imageSearcher.setIndex(new LuceneIndex("LuceneIndex", CompositeDescriptor.class));
+                } else { //using a SimpleIndex
+                    imageSearcher.setIndex(new SimpleIndex(CompositeDescriptor.class));
                 }
 
                 e.setSearcher(imageSearcher);
