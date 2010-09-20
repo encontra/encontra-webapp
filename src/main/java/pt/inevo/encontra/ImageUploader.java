@@ -98,7 +98,9 @@ public class ImageUploader extends CustomComponent
         final FileResource imageResource =
                 new FileResource(file, getApplication());
         imagePanel.removeAllComponents();
-        imagePanel.addComponent(new Embedded("", imageResource));
+        Embedded img=new Embedded("", imageResource);
+        img.setWidth("300");
+        imagePanel.addComponent(img);
 
     }
 

@@ -4,11 +4,21 @@ import java.awt.image.BufferedImage;
 import pt.inevo.encontra.index.annotation.Indexed;
 import pt.inevo.encontra.storage.IEntity;
 
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
+import javax.persistence.Transient;
+
+@Entity
 public class ImageModel implements IEntity<Long> {
 
+    @Id
+    @GeneratedValue
     private Long id;
     private String filename;
     private String description;
+
+    @Transient
     private BufferedImage image;
 
     public ImageModel() {

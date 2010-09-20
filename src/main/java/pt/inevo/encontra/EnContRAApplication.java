@@ -37,21 +37,18 @@ import pt.inevo.encontra.service.impl.PolygonDetectionServiceImpl;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Iterator;
+import java.net.URL;
+import java.util.*;
 import javax.imageio.ImageIO;
-import pt.inevo.encontra.descriptors.CompositeDescriptor;
-import pt.inevo.encontra.descriptors.CompositeDescriptorExtractor;
+import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.Persistence;
+
 import pt.inevo.encontra.descriptors.Descriptor;
 import pt.inevo.encontra.engine.Engine;
 import pt.inevo.encontra.engine.SimpleEngine;
 import pt.inevo.encontra.engine.SimpleIndexedObjectFactory;
-import pt.inevo.encontra.image.descriptors.CEDDDescriptor;
 import pt.inevo.encontra.image.descriptors.ColorLayoutDescriptor;
-import pt.inevo.encontra.image.descriptors.DominantColorDescriptor;
-import pt.inevo.encontra.image.descriptors.EdgeHistogramDescriptor;
-import pt.inevo.encontra.image.descriptors.FCTHDescriptor;
-import pt.inevo.encontra.image.descriptors.ScalableColorDescriptor;
 import pt.inevo.encontra.index.IndexedObject;
 import pt.inevo.encontra.index.Result;
 import pt.inevo.encontra.index.ResultSet;
@@ -61,11 +58,12 @@ import pt.inevo.encontra.nbtree.index.BTreeIndex;
 import pt.inevo.encontra.nbtree.index.NBTreeSearcher;
 import pt.inevo.encontra.query.KnnQuery;
 import pt.inevo.encontra.query.Query;
-import pt.inevo.encontra.storage.EntityStorage;
 import pt.inevo.encontra.storage.IEntry;
+import pt.inevo.encontra.storage.JPAObjectStorage;
 import pt.inevo.encontra.storage.SimpleObjectStorage;
 
 public class EnContRAApplication extends Application {
+
 
     public static class FileUtil {
 
@@ -132,7 +130,7 @@ public class EnContRAApplication extends Application {
 
             //for now only sets the filename
             ImageModel im = new ImageModel(image.getAbsolutePath(), "", null);
-            im.setId(idCount++);
+            //im.setId(idCount++);
 
             //get the description
             //TO DO - load the description from here
@@ -184,6 +182,21 @@ public class EnContRAApplication extends Application {
         }
     }
 
+
+
+    public class ImageStorage extends JPAObjectStorage<Long,ImageModel>{
+
+        EntityManagerFactory emf= Persistence.createEntityManagerFactory("manager");
+        EntityManager em = emf.createEntityManager(); // Retrieve an application managed entity manager
+
+        public ImageStorage(){
+            super();
+            setEntityManager(em);
+        }
+
+
+    }
+
     public class SimpleImageSearcher<O extends IndexedObject> extends NBTreeSearcher<O> {
 
         @Override
@@ -204,12 +217,15 @@ public class EnContRAApplication extends Application {
         }
     }
     private Engine<ImageModel> e = new SimpleEngine<ImageModel>();
-    private EntityStorage storage = new SimpleObjectStorage(ImageModel.class);
+
+
     private Window main = new Window("EnContRA");
     private ComboBox databaseSelector = new ComboBox("");
     private ComboBox indexSelector = new ComboBox();
     private TwinColSelect featuresSelector;
     private Property featureSelectorProperty;
+
+    private static Properties props = new Properties();
 
     @Override
     public void init() {
@@ -254,14 +270,35 @@ public class EnContRAApplication extends Application {
         configLayout.setSpacing(true);
         configLayout.setMargin(true, true, true, true);
 
+        final Map<String,String> databases=new HashMap<String,String>();
+
+
+        InputStream inputStream = this.getClass().getClassLoader()
+                .getResourceAsStream("databases.properties");
+        Properties p = new Properties();
+        try {
+            p.load(inputStream);
+        } catch (IOException e1) {
+            e1.printStackTrace();
+        }
+
+        Iterator it=p.keySet().iterator();
+        while (it.hasNext())
+        {
+            final String key = (String) it.next();
+            final String value = p.getProperty(key);
+
+            databases.put (key, value);
+        }
+
         databaseSelector.setCaption("Choose the desired database");
-        databaseSelector.addItem("Logos");
-        databaseSelector.addItem("Landscapes");
-        databaseSelector.addItem("Illustrations");
-        databaseSelector.addItem("Monuments");
-        databaseSelector.addItem("Models");
-        databaseSelector.addItem("Photos");
-        databaseSelector.addItem("All");
+        for (Map.Entry<String,String> entry : databases.entrySet())
+        {
+            final String key = entry.getKey();
+
+            databaseSelector.addItem(key);
+        }
+
         databaseSelector.setFilteringMode(Filtering.FILTERINGMODE_OFF);
         databaseSelector.setImmediate(true);
 
@@ -301,7 +338,7 @@ public class EnContRAApplication extends Application {
             public void buttonClick(ClickEvent event) {
 
                 System.out.println("Configuring the Retrieval Engine...");
-                e.setObjectStorage(new SimpleObjectStorage(ImageModel.class));
+                e.setObjectStorage(new ImageStorage()); //new SimpleObjectStorage(ImageModel.class)); // 
                 e.setIndexedObjectFactory(new SimpleIndexedObjectFactory());
 
                 Runtime.getRuntime().gc();
@@ -365,22 +402,7 @@ public class EnContRAApplication extends Application {
 
                 System.out.println("Loading some objects to the test indexes...");
 
-                ImageModelLoader loader = null;
-                if (databaseSelector.getValue().equals("Photos")) {
-                    loader = new ImageModelLoader("D:\\work\\ColaDI\\EnContRA\\encontra-index\\encontra-nbtree-index\\src\\test\\resources\\additional_images");
-                } else if (databaseSelector.getValue().equals("Logos")) {
-                    loader = new ImageModelLoader("D:\\work\\ColaDI\\EnContRA\\encontra-index\\encontra-nbtree-index\\src\\test\\resources\\BrandsAndLogos");
-                } else if (databaseSelector.getValue().equals("Landscapes")) {
-                    loader = new ImageModelLoader("D:\\work\\ColaDI\\EnContRA\\encontra-index\\encontra-nbtree-index\\src\\test\\resources\\Landscapes");
-                } else if (databaseSelector.getValue().equals("Illustrations")) {
-                    loader = new ImageModelLoader("D:\\work\\ColaDI\\EnContRA\\encontra-index\\encontra-nbtree-index\\src\\test\\resources\\DailyDrawings");
-                } else if (databaseSelector.getValue().equals("Monuments")) {
-                    loader = new ImageModelLoader("D:\\work\\ColaDI\\EnContRA\\encontra-index\\encontra-nbtree-index\\src\\test\\resources\\Monuments");
-                } else if (databaseSelector.getValue().equals("Models")) {
-                    loader = new ImageModelLoader("D:\\work\\ColaDI\\EnContRA\\encontra-index\\encontra-nbtree-index\\src\\test\\resources\\modelos");
-                } else {
-                    loader = new ImageModelLoader("D:\\work\\ColaDI\\EnContRA\\encontra-index\\encontra-nbtree-index\\src\\test\\resources");
-                }
+                ImageModelLoader loader = new ImageModelLoader(databases.get(databaseSelector.getValue()));
 
                 loader.load();
                 Iterator<File> it = loader.iterator();
@@ -420,17 +442,17 @@ public class EnContRAApplication extends Application {
         Button b = new Button("Search");
         main.addComponent(b);
 
-        final ImageStrip strip = new ImageStrip(ImageStrip.Alignment.HORIZONTAL);
-        strip.setHeight(200, ImageStrip.UNITS_PIXELS);
-        strip.setImageHeight(200);
-        strip.setImageWidth(200);
-        root.addComponent(strip);
+        final HorizontalLayout resultHolder = new HorizontalLayout();
+        resultHolder.setHeight(300, ImageStrip.UNITS_PIXELS);
+        resultHolder.setWidth(800, ImageStrip.UNITS_PIXELS);
+        root.addComponent(resultHolder);
+     
 
         b.addListener(new Button.ClickListener() {
 
             public void buttonClick(Button.ClickEvent clickEvent) {
                 File file = null;
-                strip.removeAllImages();
+
 
                 if (tabsheet.getSelectedTab().equals(canvasLayout)) {  // SKETCH
                     String svg = canvas.getSVG();
@@ -454,14 +476,31 @@ public class EnContRAApplication extends Application {
                         Query knnQuery = new KnnQuery(new IndexedObject<Serializable, BufferedImage>(28004, image), 10);
                         System.out.println("Searching for elements in the engine...");
                         ResultSet<ImageModel> results = e.search(knnQuery);
+                        System.out.println("...done!");
 
+                        resultHolder.removeAllComponents();
+                        final ImageStrip strip = new ImageStrip(ImageStrip.Alignment.HORIZONTAL);
+                        strip.setHeight(300, ImageStrip.UNITS_PIXELS);
+                        strip.setHeight(800, ImageStrip.UNITS_PIXELS);
+                        resultHolder.addComponent(strip);
                         strip.setMaxAllowed(10);
                         strip.setAnimated(true);
+                        // Make strip to behave like select
+                        strip.setSelectable(true);
 
+                        /*
+                        // Set size of the box surrounding the images
+                        strip.setImageBoxWidth(140);
+                        strip.setImageBoxHeight(140);
+
+                        // Set maximum size of the images
+                        strip.setImageMaxWidth(125);
+                        strip.setImageMaxHeight(125);*/
+
+                         System.out.println("Got "+results.size()+" results!");
                         int i = 0;
                         for (Result<ImageModel> r : results) {
-                            strip.addImage(
-                                    new FileResource(new File(r.getResult().getFilename()), EnContRAApplication.this), "image_" + i++);
+                            strip.addImage(new FileResource(new File(r.getResult().getFilename()), EnContRAApplication.this));
                         }
                     } catch (IOException ex) {
                         ex.printStackTrace();
