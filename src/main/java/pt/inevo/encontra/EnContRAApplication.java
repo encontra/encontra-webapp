@@ -63,127 +63,6 @@ import pt.inevo.encontra.storage.JPAObjectStorage;
 import pt.inevo.encontra.storage.SimpleObjectStorage;
 
 public class EnContRAApplication extends Application {
-
-
-    public static class FileUtil {
-
-        private static boolean hasExtension(File f, String[] extensions) {
-            int sz = extensions.length;
-            String ext;
-            String name = f.getName();
-            for (int i = 0; i < sz; i++) {
-                ext = (String) extensions[i];
-                if (name.endsWith(ext)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        public static java.util.List<File> findFilesRecursively(File directory, String[] extensions) {
-            java.util.List<File> list = new ArrayList<File>();
-            if (directory.isFile()) {
-                if (hasExtension(directory, extensions)) {
-                    list.add(directory);
-                }
-                return list;
-            }
-            addFilesRecursevely(list, directory, extensions);
-            return list;
-        }
-
-        private static void addFilesRecursevely(java.util.List<File> found, File rootDir, String[] extensions) {
-            if (rootDir == null) {
-                return; // we do not want waste time
-            }
-            File[] files = rootDir.listFiles();
-            if (files == null) {
-                return;
-            }
-            for (int i = 0; i < files.length; i++) {
-                File file = new File(rootDir, files[i].getName());
-                if (file.isDirectory()) {
-                    addFilesRecursevely(found, file, extensions);
-                } else {
-                    if (hasExtension(files[i], extensions)) {
-                        found.add(file);
-                    }
-                }
-            }
-        }
-    }
-
-    public static class ImageModelLoader implements Iterable<File> {
-
-        protected String imagesPath = "";
-        protected static Long idCount = 0l;
-        protected java.util.List<File> imagesFiles;
-
-        public ImageModelLoader() {
-        }
-
-        public ImageModelLoader(String imagesPath) {
-            this.imagesPath = imagesPath;
-        }
-
-        public static ImageModel loadImage(File image) {
-
-            //for now only sets the filename
-            ImageModel im = new ImageModel(image.getAbsolutePath(), "", null);
-            //im.setId(idCount++);
-
-            //get the description
-            //TO DO - load the description from here
-            im.setDescription("Description: " + image.getAbsolutePath());
-
-            //get the bufferedimage
-            try {
-                BufferedImage bufImg = ImageIO.read(image);
-                im.setImage(bufImg);
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
-
-            return im;
-        }
-
-        public java.util.List<ImageModel> getImages(String path) {
-            File root = new File(path);
-            String[] extensions = {"jpg", "png"};
-
-            java.util.List<File> imageFiles = FileUtil.findFilesRecursively(root, extensions);
-            java.util.List<ImageModel> images = new ArrayList<ImageModel>();
-
-            for (File f : imageFiles) {
-                images.add(loadImage(f));
-            }
-
-            return images;
-        }
-
-        public void load(String path) {
-            File root = new File(path);
-            String[] extensions = {"jpg", "png"};
-
-            imagesFiles = FileUtil.findFilesRecursively(root, extensions);
-        }
-
-        public void load() {
-            load(imagesPath);
-        }
-
-        public java.util.List<ImageModel> getImages() {
-            return getImages(imagesPath);
-        }
-
-        @Override
-        public Iterator<File> iterator() {
-            return imagesFiles.iterator();
-        }
-    }
-
-
-
     public class ImageStorage extends JPAObjectStorage<Long,ImageModel>{
 
         EntityManagerFactory emf= Persistence.createEntityManagerFactory("manager");
@@ -197,26 +76,7 @@ public class EnContRAApplication extends Application {
 
     }
 
-    public class SimpleImageSearcher<O extends IndexedObject> extends NBTreeSearcher<O> {
-
-        @Override
-        public ResultSet<O> search(Query query) {
-            ResultSet<IEntry> results = new ResultSet<IEntry>();
-            if (supportsQueryType(query.getType())) {
-                if (query.getType().equals(Query.QueryType.KNN)) {
-                    KnnQuery q = (KnnQuery) query;
-                    IndexedObject o = (IndexedObject) q.getQuery();
-                    if (o.getValue() instanceof BufferedImage) {
-                        Descriptor d = getDescriptorExtractor().extract(o);
-                        results = performKnnQuery(d, q.getKnn());
-                    }
-                }
-            }
-
-            return getResultObjects(results);
-        }
-    }
-    private Engine<ImageModel> e = new SimpleEngine<ImageModel>();
+        private Engine<ImageModel> e = new SimpleEngine<ImageModel>();
 
 
     private Window main = new Window("EnContRA");
@@ -230,6 +90,7 @@ public class EnContRAApplication extends Application {
     @Override
     public void init() {
 
+        Window main = new Window("EnContRA");
         setMainWindow(main);
 
         final VerticalLayout root = new VerticalLayout();
@@ -239,13 +100,11 @@ public class EnContRAApplication extends Application {
         // Create the color picker
         ColorPicker cp = new ColorPicker("Our ColorPicker", Color.BLACK);
         cp.addListener(new ColorPicker.ColorChangeListener() {
-
             public void colorChanged(ColorChangeEvent event) {
                 canvas.setColor(event.getColor());
                 getMainWindow().showNotification("Color changed!");
             }
         });
-
         final VerticalLayout canvasLayout = new VerticalLayout();
         canvasLayout.addComponent(cp);
         canvasLayout.addComponent(canvas);
