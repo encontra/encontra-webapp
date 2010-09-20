@@ -19,7 +19,6 @@ import com.vaadin.Application;
 import com.vaadin.addon.colorpicker.ColorPicker;
 import com.vaadin.addon.colorpicker.events.ColorChangeEvent;
 import com.vaadin.data.Property;
-import com.vaadin.data.Property.ValueChangeEvent;
 import com.vaadin.terminal.FileResource;
 import com.vaadin.ui.*;
 import com.vaadin.ui.AbstractSelect.Filtering;
@@ -29,38 +28,37 @@ import com.vaadin.ui.TextField;
 import com.vaadin.ui.Window;
 import org.vaadin.peter.imagestrip.ImageStrip;
 import pt.inevo.encontra.convert.SVGConverter;
+import pt.inevo.encontra.descriptors.CompositeDescriptorExtractor;
 import pt.inevo.encontra.geometry.PolygonSet;
 import pt.inevo.encontra.geometry.Polygon;
+import pt.inevo.encontra.image.descriptors.*;
 import pt.inevo.encontra.service.PolygonDetectionService;
 import pt.inevo.encontra.service.impl.PolygonDetectionServiceImpl;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.net.URL;
 import java.util.*;
+import java.util.Map.Entry;
 import javax.imageio.ImageIO;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
 
-import pt.inevo.encontra.descriptors.Descriptor;
+import pt.inevo.encontra.descriptors.CompositeDescriptor;
+
 import pt.inevo.encontra.engine.Engine;
 import pt.inevo.encontra.engine.SimpleEngine;
 import pt.inevo.encontra.engine.SimpleIndexedObjectFactory;
-import pt.inevo.encontra.image.descriptors.ColorLayoutDescriptor;
 import pt.inevo.encontra.index.IndexedObject;
 import pt.inevo.encontra.index.Result;
 import pt.inevo.encontra.index.ResultSet;
 import pt.inevo.encontra.index.SimpleIndex;
 import pt.inevo.encontra.lucene.index.LuceneIndex;
 import pt.inevo.encontra.nbtree.index.BTreeIndex;
-import pt.inevo.encontra.nbtree.index.NBTreeSearcher;
 import pt.inevo.encontra.query.KnnQuery;
 import pt.inevo.encontra.query.Query;
-import pt.inevo.encontra.storage.IEntry;
 import pt.inevo.encontra.storage.JPAObjectStorage;
-import pt.inevo.encontra.storage.SimpleObjectStorage;
 
 public class EnContRAApplication extends Application {
     public class ImageStorage extends JPAObjectStorage<Long,ImageModel>{
@@ -78,19 +76,20 @@ public class EnContRAApplication extends Application {
 
         private Engine<ImageModel> e = new SimpleEngine<ImageModel>();
 
+    private String [] descriptors = new String[] {"CEDD", "ColorLayout", "Dominant Color",
+                            "EdgeHistogram", "FCTH", "Scalable Color"};
 
     private Window main = new Window("EnContRA");
+    private SplitPanel horiz = new SplitPanel();
     private ComboBox databaseSelector = new ComboBox("");
     private ComboBox indexSelector = new ComboBox();
-    private TwinColSelect featuresSelector;
-    private Property featureSelectorProperty;
+    private HashMap<CheckBox, Slider> descriptorsUI = new HashMap<CheckBox, Slider>();
 
     private static Properties props = new Properties();
 
     @Override
     public void init() {
 
-        Window main = new Window("EnContRA");
         setMainWindow(main);
 
         final VerticalLayout root = new VerticalLayout();
@@ -100,11 +99,13 @@ public class EnContRAApplication extends Application {
         // Create the color picker
         ColorPicker cp = new ColorPicker("Our ColorPicker", Color.BLACK);
         cp.addListener(new ColorPicker.ColorChangeListener() {
+
             public void colorChanged(ColorChangeEvent event) {
                 canvas.setColor(event.getColor());
                 getMainWindow().showNotification("Color changed!");
             }
         });
+
         final VerticalLayout canvasLayout = new VerticalLayout();
         canvasLayout.addComponent(cp);
         canvasLayout.addComponent(canvas);
@@ -161,6 +162,8 @@ public class EnContRAApplication extends Application {
         databaseSelector.setFilteringMode(Filtering.FILTERINGMODE_OFF);
         databaseSelector.setImmediate(true);
 
+        configLayout.addComponent(databaseSelector);
+
         indexSelector.setCaption("Choose the desired index:");
         indexSelector.addItem("Btree Index");
         indexSelector.addItem("Lucene Index");
@@ -168,27 +171,46 @@ public class EnContRAApplication extends Application {
         indexSelector.setFilteringMode(Filtering.FILTERINGMODE_OFF);
         indexSelector.setImmediate(true);
 
-        featuresSelector = new TwinColSelect("Please select the descriptors to use");
-        featuresSelector.addItem("CEDD");
-        featuresSelector.addItem("ColorLayout");
-        featuresSelector.addItem("Dominant Color");
-        featuresSelector.addItem("EdgeHistogram");
-        featuresSelector.addItem("FCTH");
-        featuresSelector.addItem("Scalable Color");
-        featuresSelector.setRows(5);
-        featuresSelector.setNullSelectionAllowed(false);
-        featuresSelector.setMultiSelect(true);
-        featuresSelector.setImmediate(true);
-        featuresSelector.addListener(new Property.ValueChangeListener() {
+        configLayout.addComponent(indexSelector);
 
-            public void valueChange(ValueChangeEvent event) {
-                if (!event.getProperty().toString().equals("[]")) {
-                    System.out.println(event.getProperty());
-                    featureSelectorProperty = event.getProperty();
+        configLayout.addComponent(new com.vaadin.ui.Label("Choose the descriptors to be used:"));
+
+        for (String feat: descriptors){
+            HorizontalLayout hl = new HorizontalLayout();
+            hl.setSpacing(true);
+            CheckBox cb = new CheckBox(feat);
+            cb.setDescription(feat + " Descriptor");
+            cb.setEnabled(true);
+            cb.setImmediate(true);
+            cb.addListener(new Button.ClickListener() {
+
+                public void buttonClick(ClickEvent event) {
+                    boolean enabled = event.getButton().booleanValue();
+                    Slider s = descriptorsUI.get((CheckBox)event.getButton());
+                    s.setEnabled(enabled);
                 }
-            }
-        });
+            });
 
+            final Slider slider = new Slider("Weight");
+            slider.setWidth(100, Slider.UNITS_PIXELS);
+            slider.setMin(0);
+            slider.setMax(100);
+            try {
+                slider.setValue(100.0);
+            } catch (Slider.ValueOutOfBoundsException ex) {
+                ex.printStackTrace();
+            }
+            slider.setImmediate(true);
+            slider.setEnabled(false);
+
+            hl.addComponent(cb);
+            hl.addComponent(slider);
+            hl.setComponentAlignment(slider, Alignment.TOP_CENTER);
+
+            descriptorsUI.put(cb, slider);
+
+            configLayout.addComponent(hl);
+        }
 
         Button applyNewConfiguration = new Button("Apply");
         applyNewConfiguration.setImmediate(true);
@@ -206,55 +228,33 @@ public class EnContRAApplication extends Application {
                 SimpleImageSearcher imageSearcher = new SimpleImageSearcher();
 
                 //getting the descriptors
-//                CompositeDescriptorExtractor compositeImageDescriptorExtractor = new CompositeDescriptorExtractor(IndexedObject.class, null);
-//
-//                String[] selectedFeatures = featureSelectorProperty.toString().split(",");
-//                for (String feature : selectedFeatures) {
-//                    if (feature.contains("CEDD")) {
-////                        System.out.println("CEDD");
-//                        compositeImageDescriptorExtractor.addExtractor(new CEDDDescriptor<IndexedObject>(), 1);
-//                    } else if (feature.contains("ColorLayout")) {
-////                        System.out.println("ColorLayout");
-//                        compositeImageDescriptorExtractor.addExtractor(new ColorLayoutDescriptor<IndexedObject>(), 1);
-//                    } else if (feature.contains("Dominant Color")) {
-////                        System.out.println("DominantColor");
-//                        compositeImageDescriptorExtractor.addExtractor(new DominantColorDescriptor<IndexedObject>(), 1);
-//                    } else if (feature.contains("EdgeHistogram")) {
-////                        System.out.println("EdgeHistogram");
-//                        compositeImageDescriptorExtractor.addExtractor(new EdgeHistogramDescriptor<IndexedObject>(), 1);
-//                    } else if (feature.contains("FCTH")) {
-////                        System.out.println("FCTH");
-//                        compositeImageDescriptorExtractor.addExtractor(new FCTHDescriptor<IndexedObject>(), 1);
-//                    } else if (feature.contains("Scalable Color")) {
-////                        System.out.println("Scalable Color");
-//                        compositeImageDescriptorExtractor.addExtractor(new ScalableColorDescriptor(), 1);
-//                    }
-//                }
-//
-//                imageSearcher.setDescriptorExtractor(compositeImageDescriptorExtractor);
-//
-//                if (indexSelector.getValue().equals("Btree Index")) {
-//                    //using a BTreeIndex
-//                    imageSearcher.setIndex(new BTreeIndex(CompositeDescriptor.class));
-//                } else if (indexSelector.getValue().equals("Lucene Index")) {
-//                    //using a LuceneIndex
-//                    imageSearcher.setIndex(new LuceneIndex("LuceneIndex", CompositeDescriptor.class));
-//                } else {
-//                    //using a SimpleIndex
-//                    imageSearcher.setIndex(new SimpleIndex(CompositeDescriptor.class));
-//                }
+                CompositeDescriptorExtractor compositeImageDescriptorExtractor = new CompositeDescriptorExtractor(IndexedObject.class, null);
 
-                imageSearcher.setDescriptorExtractor(new ColorLayoutDescriptor<IndexedObject>());
+                Set<Entry<CheckBox, Slider>> features = descriptorsUI.entrySet();
+                for (Entry<CheckBox, Slider> pair: features){
+                    if (pair.getKey().getCaption().contains("CEDD") && pair.getKey().booleanValue()) {
+                        compositeImageDescriptorExtractor.addExtractor(new CEDDDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                    } else if (pair.getKey().getCaption().contains("ColorLayout") && pair.getKey().booleanValue()) {
+                        compositeImageDescriptorExtractor.addExtractor(new ColorLayoutDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                    } else if (pair.getKey().getCaption().contains("Dominant Color") && pair.getKey().booleanValue()) {
+                        compositeImageDescriptorExtractor.addExtractor(new DominantColorDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                    } else if (pair.getKey().getCaption().contains("EdgeHistogram") && pair.getKey().booleanValue()) {
+                        compositeImageDescriptorExtractor.addExtractor(new EdgeHistogramDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                    } else if (pair.getKey().getCaption().contains("FCTH") && pair.getKey().booleanValue()) {
+                        compositeImageDescriptorExtractor.addExtractor(new FCTHDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                    } else if (pair.getKey().getCaption().contains("Scalable Color") && pair.getKey().booleanValue()) {
+                        compositeImageDescriptorExtractor.addExtractor(new ScalableColorDescriptor(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                    }
+                }
 
-                if (indexSelector.getValue().equals("Btree Index")) {
-                    //using a BTreeIndex
-                    imageSearcher.setIndex(new BTreeIndex(ColorLayoutDescriptor.class));
-                } else if (indexSelector.getValue().equals("Lucene Index")) {
-                    //using a LuceneIndex
-                    imageSearcher.setIndex(new LuceneIndex("LuceneIndex", ColorLayoutDescriptor.class));
-                } else {
-                    //using a SimpleIndex
-                    imageSearcher.setIndex(new SimpleIndex(ColorLayoutDescriptor.class));
+                imageSearcher.setDescriptorExtractor(compositeImageDescriptorExtractor);
+
+                if (indexSelector.getValue().equals("Btree Index")) { //using a BTreeIndex
+                    imageSearcher.setIndex(new BTreeIndex(CompositeDescriptor.class));
+                } else if (indexSelector.getValue().equals("Lucene Index")) { //using a LuceneIndex
+                    imageSearcher.setIndex(new LuceneIndex("LuceneIndex", CompositeDescriptor.class));
+                } else { //using a SimpleIndex
+                    imageSearcher.setIndex(new SimpleIndex(CompositeDescriptor.class));
                 }
 
                 e.setSearcher(imageSearcher);
@@ -278,17 +278,24 @@ public class EnContRAApplication extends Application {
                 }
 
                 System.out.println("End of the loading phase...");
+                main.showNotification("Database loading sucessfully finished!");
             }
         });
 
-        configLayout.addComponent(databaseSelector);
-        configLayout.addComponent(indexSelector);
-        configLayout.addComponent(featuresSelector);
         configLayout.addComponent(applyNewConfiguration);
+
+        // Add a horizontal SplitPanel to the lower area
+
+        horiz.setOrientation(SplitPanel.ORIENTATION_HORIZONTAL);
+        horiz.setSplitPosition(50); // percent
+        horiz.setSizeFull();
+
+        horiz.addComponent(uploader);
+        horiz.addComponent(new com.vaadin.ui.Label("Selected image from the strip should appear here."));
 
         final TabSheet tabsheet = new TabSheet();
         tabsheet.addTab(canvasLayout, "Sketch", null);
-        tabsheet.addTab(uploader, "Picture", null);
+        tabsheet.addTab(horiz, "Picture", null);
         tabsheet.addTab(configLayout, "Configuration", null);
 
         root.addComponent(tabsheet);
