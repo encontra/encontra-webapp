@@ -1,6 +1,7 @@
 package pt.inevo.encontra;
 
 import java.awt.image.BufferedImage;
+import java.io.Serializable;
 import pt.inevo.encontra.index.annotation.Indexed;
 import pt.inevo.encontra.storage.IEntity;
 
@@ -10,7 +11,7 @@ import javax.persistence.Id;
 import javax.persistence.Transient;
 
 @Entity
-public class ImageModel implements IEntity<Long> {
+public class ImageModel implements IEntity<Long>, Serializable {
 
     @Id
     @GeneratedValue

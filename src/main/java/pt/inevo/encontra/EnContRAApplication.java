@@ -19,7 +19,10 @@ import com.vaadin.Application;
 import com.vaadin.addon.colorpicker.ColorPicker;
 import com.vaadin.addon.colorpicker.events.ColorChangeEvent;
 import com.vaadin.data.Property;
+import com.vaadin.data.Property.ValueChangeEvent;
 import com.vaadin.terminal.FileResource;
+import com.vaadin.terminal.Paintable.RepaintRequestEvent;
+import com.vaadin.terminal.Paintable.RepaintRequestListener;
 import com.vaadin.ui.*;
 import com.vaadin.ui.AbstractSelect.Filtering;
 import com.vaadin.ui.Button;
@@ -38,6 +41,7 @@ import pt.inevo.encontra.service.impl.PolygonDetectionServiceImpl;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.lang.reflect.Method;
 import java.util.*;
 import java.util.Map.Entry;
 import javax.imageio.ImageIO;
@@ -46,7 +50,6 @@ import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
 
 import pt.inevo.encontra.descriptors.CompositeDescriptor;
-
 import pt.inevo.encontra.engine.Engine;
 import pt.inevo.encontra.engine.SimpleEngine;
 import pt.inevo.encontra.engine.SimpleIndexedObjectFactory;
@@ -59,32 +62,30 @@ import pt.inevo.encontra.nbtree.index.BTreeIndex;
 import pt.inevo.encontra.query.KnnQuery;
 import pt.inevo.encontra.query.Query;
 import pt.inevo.encontra.storage.JPAObjectStorage;
+import pt.inevo.encontra.storage.SimpleObjectStorage;
 
 public class EnContRAApplication extends Application {
-    public class ImageStorage extends JPAObjectStorage<Long,ImageModel>{
 
-        EntityManagerFactory emf= Persistence.createEntityManagerFactory("manager");
+    public class ImageStorage extends JPAObjectStorage<Long, ImageModel> {
+
+        EntityManagerFactory emf = Persistence.createEntityManagerFactory("manager");
         EntityManager em = emf.createEntityManager(); // Retrieve an application managed entity manager
 
-        public ImageStorage(){
+        public ImageStorage() {
             super();
             setEntityManager(em);
         }
-
-
     }
-
-        private Engine<ImageModel> e = new SimpleEngine<ImageModel>();
-
-    private String [] descriptors = new String[] {"CEDD", "ColorLayout", "Dominant Color",
-                            "EdgeHistogram", "FCTH", "Scalable Color"};
-
+    private Engine<ImageModel> e = new SimpleEngine<ImageModel>();
+    private String[] descriptors = new String[]{"CEDD", "ColorLayout", "Dominant Color",
+        "EdgeHistogram", "FCTH", "Scalable Color"};
     private Window main = new Window("EnContRA");
     private SplitPanel horiz = new SplitPanel();
+    private ImageUploader uploader;
     private ComboBox databaseSelector = new ComboBox("");
     private ComboBox indexSelector = new ComboBox();
     private HashMap<CheckBox, Slider> descriptorsUI = new HashMap<CheckBox, Slider>();
-
+    private HashMap<ImageStrip.Image, String> resultImages = new HashMap<ImageStrip.Image, String>();
     private static Properties props = new Properties();
 
     @Override
@@ -124,17 +125,15 @@ public class EnContRAApplication extends Application {
                 }
             }
         });
-        final ImageUploader uploader = new ImageUploader();
+        uploader = new ImageUploader();
 
         final VerticalLayout configLayout = new VerticalLayout();
         configLayout.setSpacing(true);
         configLayout.setMargin(true, true, true, true);
 
-        final Map<String,String> databases=new HashMap<String,String>();
+        final Map<String, String> databases = new HashMap<String, String>();
 
-
-        InputStream inputStream = this.getClass().getClassLoader()
-                .getResourceAsStream("databases.properties");
+        InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream("databases.properties");
         Properties p = new Properties();
         try {
             p.load(inputStream);
@@ -142,18 +141,16 @@ public class EnContRAApplication extends Application {
             e1.printStackTrace();
         }
 
-        Iterator it=p.keySet().iterator();
-        while (it.hasNext())
-        {
+        Iterator it = p.keySet().iterator();
+        while (it.hasNext()) {
             final String key = (String) it.next();
             final String value = p.getProperty(key);
 
-            databases.put (key, value);
+            databases.put(key, value);
         }
 
         databaseSelector.setCaption("Choose the desired database");
-        for (Map.Entry<String,String> entry : databases.entrySet())
-        {
+        for (Map.Entry<String, String> entry : databases.entrySet()) {
             final String key = entry.getKey();
 
             databaseSelector.addItem(key);
@@ -175,7 +172,7 @@ public class EnContRAApplication extends Application {
 
         configLayout.addComponent(new com.vaadin.ui.Label("Choose the descriptors to be used:"));
 
-        for (String feat: descriptors){
+        for (String feat : descriptors) {
             HorizontalLayout hl = new HorizontalLayout();
             hl.setSpacing(true);
             CheckBox cb = new CheckBox(feat);
@@ -186,7 +183,7 @@ public class EnContRAApplication extends Application {
 
                 public void buttonClick(ClickEvent event) {
                     boolean enabled = event.getButton().booleanValue();
-                    Slider s = descriptorsUI.get((CheckBox)event.getButton());
+                    Slider s = descriptorsUI.get((CheckBox) event.getButton());
                     s.setEnabled(enabled);
                 }
             });
@@ -219,7 +216,8 @@ public class EnContRAApplication extends Application {
             public void buttonClick(ClickEvent event) {
 
                 System.out.println("Configuring the Retrieval Engine...");
-                e.setObjectStorage(new ImageStorage()); //new SimpleObjectStorage(ImageModel.class)); // 
+                e.setObjectStorage(new ImageStorage()); //new SimpleObjectStorage(ImageModel.class)); //
+//                e.setObjectStorage(new SimpleObjectStorage(ImageModel.class)); //
                 e.setIndexedObjectFactory(new SimpleIndexedObjectFactory());
 
                 Runtime.getRuntime().gc();
@@ -231,7 +229,7 @@ public class EnContRAApplication extends Application {
                 CompositeDescriptorExtractor compositeImageDescriptorExtractor = new CompositeDescriptorExtractor(IndexedObject.class, null);
 
                 Set<Entry<CheckBox, Slider>> features = descriptorsUI.entrySet();
-                for (Entry<CheckBox, Slider> pair: features){
+                for (Entry<CheckBox, Slider> pair : features) {
                     if (pair.getKey().getCaption().contains("CEDD") && pair.getKey().booleanValue()) {
                         compositeImageDescriptorExtractor.addExtractor(new CEDDDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
                     } else if (pair.getKey().getCaption().contains("ColorLayout") && pair.getKey().booleanValue()) {
@@ -291,7 +289,9 @@ public class EnContRAApplication extends Application {
         horiz.setSizeFull();
 
         horiz.addComponent(uploader);
-        horiz.addComponent(new com.vaadin.ui.Label("Selected image from the strip should appear here."));
+        VerticalLayout v = new VerticalLayout();
+        v.addComponent(new com.vaadin.ui.Label("Selected image from the strip should appear here."));
+        horiz.addComponent(v);
 
         final TabSheet tabsheet = new TabSheet();
         tabsheet.addTab(canvasLayout, "Sketch", null);
@@ -312,7 +312,7 @@ public class EnContRAApplication extends Application {
         resultHolder.setHeight(300, ImageStrip.UNITS_PIXELS);
         resultHolder.setWidth(800, ImageStrip.UNITS_PIXELS);
         root.addComponent(resultHolder);
-     
+
 
         b.addListener(new Button.ClickListener() {
 
@@ -353,6 +353,24 @@ public class EnContRAApplication extends Application {
                         strip.setAnimated(true);
                         // Make strip to behave like select
                         strip.setSelectable(true);
+                        strip.addListener(new Property.ValueChangeListener() {
+
+                            @Override
+                            public void valueChange(ValueChangeEvent event) {
+                                main.showNotification(event.getProperty().getValue().toString());
+                                ImageStrip.Image img = (ImageStrip.Image)event.getProperty().getValue();
+
+                                Embedded e = new Embedded("", new FileResource(new File(resultImages.get(img)), EnContRAApplication.this));
+                                e.setWidth("300");
+                                
+                                VerticalLayout v = new VerticalLayout();
+                                v.addComponent(e);
+
+                                horiz.removeComponent(horiz.getSecondComponent());
+                                horiz.addComponent(v);
+                                horiz.requestRepaintAll();
+                            }
+                        });
 
                         /*
                         // Set size of the box surrounding the images
@@ -363,11 +381,14 @@ public class EnContRAApplication extends Application {
                         strip.setImageMaxWidth(125);
                         strip.setImageMaxHeight(125);*/
 
-                         System.out.println("Got "+results.size()+" results!");
+                        System.out.println("Got " + results.size() + " results!");
                         int i = 0;
+                        resultImages.clear();
                         for (Result<ImageModel> r : results) {
-                            strip.addImage(new FileResource(new File(r.getResult().getFilename()), EnContRAApplication.this));
+                            ImageStrip.Image img = strip.addImage(new FileResource(new File(r.getResult().getFilename()), EnContRAApplication.this));
+                            resultImages.put(img, r.getResult().getFilename());
                         }
+
                     } catch (IOException ex) {
                         ex.printStackTrace();
                     }
