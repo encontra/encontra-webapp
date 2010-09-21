@@ -99,11 +99,10 @@ public class ImageUploader extends CustomComponent
                 new FileResource(file, getApplication());
         imagePanel.removeAllComponents();
         Embedded img=new Embedded("", imageResource);
-        img.setWidth("300");
+//        img.setWidth("300");
+        img.setHeight("300");
         imagePanel.addComponent(img);
-
     }
-
 
     // This is called if the upload fails.
     public void uploadFailed(Upload.FailedEvent event) {

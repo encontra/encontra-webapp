@@ -21,14 +21,13 @@ import com.vaadin.addon.colorpicker.events.ColorChangeEvent;
 import com.vaadin.data.Property;
 import com.vaadin.data.Property.ValueChangeEvent;
 import com.vaadin.terminal.FileResource;
-import com.vaadin.terminal.Paintable.RepaintRequestEvent;
-import com.vaadin.terminal.Paintable.RepaintRequestListener;
 import com.vaadin.ui.*;
 import com.vaadin.ui.AbstractSelect.Filtering;
 import com.vaadin.ui.Button;
 import com.vaadin.ui.Button.ClickEvent;
 import com.vaadin.ui.TextField;
 import com.vaadin.ui.Window;
+import com.vaadin.ui.Window.Notification;
 import org.vaadin.peter.imagestrip.ImageStrip;
 import pt.inevo.encontra.convert.SVGConverter;
 import pt.inevo.encontra.descriptors.CompositeDescriptorExtractor;
@@ -41,7 +40,6 @@ import pt.inevo.encontra.service.impl.PolygonDetectionServiceImpl;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.lang.reflect.Method;
 import java.util.*;
 import java.util.Map.Entry;
 import javax.imageio.ImageIO;
@@ -62,7 +60,6 @@ import pt.inevo.encontra.nbtree.index.BTreeIndex;
 import pt.inevo.encontra.query.KnnQuery;
 import pt.inevo.encontra.query.Query;
 import pt.inevo.encontra.storage.JPAObjectStorage;
-import pt.inevo.encontra.storage.SimpleObjectStorage;
 
 public class EnContRAApplication extends Application {
 
@@ -84,6 +81,7 @@ public class EnContRAApplication extends Application {
     private ImageUploader uploader;
     private ComboBox databaseSelector = new ComboBox("");
     private ComboBox indexSelector = new ComboBox();
+    private com.vaadin.ui.Label logViewer = new com.vaadin.ui.Label();
     private HashMap<CheckBox, Slider> descriptorsUI = new HashMap<CheckBox, Slider>();
     private HashMap<ImageStrip.Image, String> resultImages = new HashMap<ImageStrip.Image, String>();
     private static Properties props = new Properties();
@@ -101,6 +99,7 @@ public class EnContRAApplication extends Application {
         ColorPicker cp = new ColorPicker("Our ColorPicker", Color.BLACK);
         cp.addListener(new ColorPicker.ColorChangeListener() {
 
+            @Override
             public void colorChanged(ColorChangeEvent event) {
                 canvas.setColor(event.getColor());
                 getMainWindow().showNotification("Color changed!");
@@ -126,6 +125,12 @@ public class EnContRAApplication extends Application {
             }
         });
         uploader = new ImageUploader();
+        uploader.setHeight(450, ImageUploader.UNITS_PIXELS);
+
+        final SplitPanel configPanel = new SplitPanel();
+        configPanel.setMargin(true, true, true, true);
+        configPanel.setOrientation(SplitPanel.ORIENTATION_HORIZONTAL);
+        configPanel.setSplitPosition(50); // percent
 
         final VerticalLayout configLayout = new VerticalLayout();
         configLayout.setSpacing(true);
@@ -215,9 +220,14 @@ public class EnContRAApplication extends Application {
 
             public void buttonClick(ClickEvent event) {
 
+                if (indexSelector.getValue() == null || databaseSelector.getValue() == null) {
+                    main.showNotification("You must select a database, an index to be used and at least one descriptor type.",
+                            Notification.TYPE_ERROR_MESSAGE);
+                    return;
+                }
+
                 System.out.println("Configuring the Retrieval Engine...");
-                e.setObjectStorage(new ImageStorage()); //new SimpleObjectStorage(ImageModel.class)); //
-//                e.setObjectStorage(new SimpleObjectStorage(ImageModel.class)); //
+                e.setObjectStorage(new ImageStorage());
                 e.setIndexedObjectFactory(new SimpleIndexedObjectFactory());
 
                 Runtime.getRuntime().gc();
@@ -269,8 +279,10 @@ public class EnContRAApplication extends Application {
                         File f = it.next();
                         ImageModel im = loader.loadImage(f);
                         e.insert(im);
+                        logViewer.setValue(logViewer.getValue().toString() + "\n Image processed: " + im.getFilename());
                     } catch (Exception e) {
                         System.out.println("Couldn't load the image, because: " + e.toString());
+                        logViewer.setValue(logViewer.getValue().toString() + "\n" + "Couldn't load the image, because: " + e.toString());
                         continue;
                     }
                 }
@@ -282,21 +294,42 @@ public class EnContRAApplication extends Application {
 
         configLayout.addComponent(applyNewConfiguration);
 
+        final VerticalLayout vr = new VerticalLayout();
+        vr.setSpacing(true);
+        vr.setMargin(true, true, true, true);
+
+        vr.addComponent(logViewer);
+        logViewer.setImmediate(true);
+        logViewer.setHeight(350, TextField.UNITS_PIXELS);
+
+        com.vaadin.ui.Button cleanLog = new com.vaadin.ui.Button("Clean");
+        cleanLog.addListener(new Button.ClickListener() {
+
+            @Override
+            public void buttonClick(ClickEvent event) {
+                logViewer.setValue("");
+            }
+        });
+        vr.addComponent(cleanLog);
+
+        configPanel.addComponent(configLayout);
+        configPanel.addComponent(vr);
+
         // Add a horizontal SplitPanel to the lower area
 
         horiz.setOrientation(SplitPanel.ORIENTATION_HORIZONTAL);
         horiz.setSplitPosition(50); // percent
-        horiz.setSizeFull();
+        horiz.setHeight(450, VerticalLayout.UNITS_PIXELS);
 
         horiz.addComponent(uploader);
         VerticalLayout v = new VerticalLayout();
-        v.addComponent(new com.vaadin.ui.Label("Selected image from the strip should appear here."));
+        v.addComponent(new com.vaadin.ui.Label("Select an image from the strip to display it here."));
         horiz.addComponent(v);
 
         final TabSheet tabsheet = new TabSheet();
         tabsheet.addTab(canvasLayout, "Sketch", null);
         tabsheet.addTab(horiz, "Picture", null);
-        tabsheet.addTab(configLayout, "Configuration", null);
+        tabsheet.addTab(configPanel, "Configuration", null);
 
         root.addComponent(tabsheet);
 
@@ -305,29 +338,27 @@ public class EnContRAApplication extends Application {
         keywords.setColumns(40);
         h.addComponent(keywords);
 
-        Button b = new Button("Search");
+        final Button b = new Button("Search");
         main.addComponent(b);
 
         final HorizontalLayout resultHolder = new HorizontalLayout();
-        resultHolder.setHeight(300, ImageStrip.UNITS_PIXELS);
-        resultHolder.setWidth(800, ImageStrip.UNITS_PIXELS);
+        resultHolder.setHeight(150, ImageStrip.UNITS_PIXELS);
+        resultHolder.setWidth(100, ImageStrip.UNITS_PERCENTAGE);
         root.addComponent(resultHolder);
-
 
         b.addListener(new Button.ClickListener() {
 
             public void buttonClick(Button.ClickEvent clickEvent) {
                 File file = null;
 
-
                 if (tabsheet.getSelectedTab().equals(canvasLayout)) {  // SKETCH
                     String svg = canvas.getSVG();
-                    try {
+                    try { //query by sketch
                         file = File.createTempFile("encontra", ".jpg");
                         new SVGConverter().convertToMimeType("image/jpeg", new ByteArrayInputStream(svg.getBytes()), new FileOutputStream(file));
 
                     } catch (IOException e) {
-                        e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+                        e.printStackTrace();
                     }
 
                 } else {  // IMAGE
@@ -336,63 +367,64 @@ public class EnContRAApplication extends Application {
 
                 if (file != null) {
                     try {
-                        System.out.println("Creating a knn query...");
-                        BufferedImage image = ImageIO.read(file);
-
-                        Query knnQuery = new KnnQuery(new IndexedObject<Serializable, BufferedImage>(28004, image), 10);
-                        System.out.println("Searching for elements in the engine...");
-                        ResultSet<ImageModel> results = e.search(knnQuery);
-                        System.out.println("...done!");
-
-                        resultHolder.removeAllComponents();
-                        final ImageStrip strip = new ImageStrip(ImageStrip.Alignment.HORIZONTAL);
-                        strip.setHeight(300, ImageStrip.UNITS_PIXELS);
-                        strip.setHeight(800, ImageStrip.UNITS_PIXELS);
-                        resultHolder.addComponent(strip);
-                        strip.setMaxAllowed(10);
-                        strip.setAnimated(true);
-                        // Make strip to behave like select
-                        strip.setSelectable(true);
-                        strip.addListener(new Property.ValueChangeListener() {
-
-                            @Override
-                            public void valueChange(ValueChangeEvent event) {
-                                main.showNotification(event.getProperty().getValue().toString());
-                                ImageStrip.Image img = (ImageStrip.Image)event.getProperty().getValue();
-
-                                Embedded e = new Embedded("", new FileResource(new File(resultImages.get(img)), EnContRAApplication.this));
-                                e.setWidth("300");
-                                
-                                VerticalLayout v = new VerticalLayout();
-                                v.addComponent(e);
-
-                                horiz.removeComponent(horiz.getSecondComponent());
-                                horiz.addComponent(v);
-                                horiz.requestRepaintAll();
-                            }
-                        });
-
-                        /*
-                        // Set size of the box surrounding the images
-                        strip.setImageBoxWidth(140);
-                        strip.setImageBoxHeight(140);
-
-                        // Set maximum size of the images
-                        strip.setImageMaxWidth(125);
-                        strip.setImageMaxHeight(125);*/
-
-                        System.out.println("Got " + results.size() + " results!");
-                        int i = 0;
-                        resultImages.clear();
-                        for (Result<ImageModel> r : results) {
-                            ImageStrip.Image img = strip.addImage(new FileResource(new File(r.getResult().getFilename()), EnContRAApplication.this));
-                            resultImages.put(img, r.getResult().getFilename());
-                        }
+                        queryByExample(file);
 
                     } catch (IOException ex) {
                         ex.printStackTrace();
+                        main.showNotification("There was an error when performing the query, please re-try!",
+                                Notification.TYPE_ERROR_MESSAGE);
                     }
                 }
+            }
+
+            private void queryByExample(File file) throws IOException {
+                resultHolder.removeAllComponents();
+                ResultSet<ImageModel> results = knnQuery(file);
+                ImageStrip strip = setupImageStrip();
+                resultHolder.addComponent(strip);
+                strip.addListener(new Property.ValueChangeListener() {
+
+                    @Override
+                    public void valueChange(ValueChangeEvent event) {
+                        final ImageStrip.Image img = (ImageStrip.Image) event.getProperty().getValue();
+                        Embedded e = new Embedded("", new FileResource(new File(resultImages.get(img)), EnContRAApplication.this));
+                        e.setHeight("300");
+                        VerticalLayout v = new VerticalLayout();
+                        v.setSpacing(true);
+                        Button findSimilar = new Button("Find similar");
+                        findSimilar.addListener(new Button.ClickListener() {
+
+                            @Override
+                            public void buttonClick(ClickEvent event) {
+                                try {
+                                    queryByExample(new File(resultImages.get(img)));
+                                    horiz.removeComponent(horiz.getSecondComponent());
+                                    VerticalLayout v = new VerticalLayout();
+                                    v.addComponent(new com.vaadin.ui.Label("Select an image from the strip to display it here."));
+                                    horiz.addComponent(v);
+                                } catch (IOException ex) {
+                                    ex.printStackTrace();
+                                    main.showNotification("There was an error when performing the query, please re-try!",
+                                            Notification.TYPE_ERROR_MESSAGE);
+                                }
+                            }
+                        });
+                        v.addComponent(findSimilar);
+                        v.addComponent(e);
+                        horiz.removeComponent(horiz.getSecondComponent());
+                        horiz.addComponent(v);
+                        horiz.requestRepaintAll();
+                    }
+                });
+                System.out.println("Got " + results.size() + " results!");
+                int i = 0;
+                resultImages.clear();
+                for (Result<ImageModel> r : results) {
+                    ImageStrip.Image img = strip.addImage(new FileResource(new File(r.getResult().getFilename()), EnContRAApplication.this));
+                    resultImages.put(img, r.getResult().getFilename());
+                }
+
+                main.showNotification("Query sucessfully completed");
             }
         });
         h.addComponent(b);
@@ -400,5 +432,32 @@ public class EnContRAApplication extends Application {
         root.addComponent(h);
 
         setTheme("mytheme");
+    }
+
+    private ImageStrip setupImageStrip() {
+        final ImageStrip strip = new ImageStrip(ImageStrip.Alignment.HORIZONTAL);
+        strip.setHeight(150, ImageStrip.UNITS_PIXELS);
+        strip.setWidth(100, ImageStrip.UNITS_PERCENTAGE);
+        strip.setAnimated(true);
+        strip.setMaxAllowed(5);
+        // Make strip to behave like select
+        strip.setSelectable(true);
+        //size of the surrounding boxes
+        strip.setImageBoxWidth(150);
+        strip.setImageBoxHeight(150);
+        //max size of the images
+        strip.setImageMaxWidth(135);
+        strip.setImageMaxHeight(135);
+        return strip;
+    }
+
+    private ResultSet<ImageModel> knnQuery(File file) throws IOException {
+        System.out.println("Creating a knn query...");
+        BufferedImage image = ImageIO.read(file);
+        Query knnQuery = new KnnQuery(new IndexedObject<Serializable, BufferedImage>(28004, image), 10);
+        System.out.println("Searching for elements in the engine...");
+        ResultSet<ImageModel> results = e.search(knnQuery);
+        System.out.println("...done!");
+        return results;
     }
 }
