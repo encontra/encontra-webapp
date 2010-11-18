@@ -57,8 +57,10 @@ import pt.inevo.encontra.index.ResultSet;
 import pt.inevo.encontra.index.SimpleIndex;
 import pt.inevo.encontra.lucene.index.LuceneIndex;
 import pt.inevo.encontra.nbtree.index.BTreeIndex;
-import pt.inevo.encontra.query.KnnQuery;
-import pt.inevo.encontra.query.Query;
+import pt.inevo.encontra.query.CriteriaQuery;
+import pt.inevo.encontra.query.Path;
+import pt.inevo.encontra.query.QueryProcessorDefaultImpl;
+import pt.inevo.encontra.query.criteria.CriteriaBuilderImpl;
 import pt.inevo.encontra.storage.JPAObjectStorage;
 
 public class EnContRAApplication extends Application {
@@ -229,6 +231,7 @@ public class EnContRAApplication extends Application {
                 System.out.println("Configuring the Retrieval Engine...");
                 e.setObjectStorage(new ImageStorage());
                 e.setIndexedObjectFactory(new SimpleIndexedObjectFactory());
+                e.setQueryProcessor(new QueryProcessorDefaultImpl<IndexedObject>());
 
                 Runtime.getRuntime().gc();
 
@@ -265,7 +268,7 @@ public class EnContRAApplication extends Application {
                     imageSearcher.setIndex(new SimpleIndex(CompositeDescriptor.class));
                 }
 
-                e.setSearcher(imageSearcher);
+                e.getQueryProcessor().setSearcher(ImageModel.class.getName(),imageSearcher);
 
                 System.out.println("Loading some objects to the test indexes...");
 
@@ -454,9 +457,20 @@ public class EnContRAApplication extends Application {
     private ResultSet<ImageModel> knnQuery(File file) throws IOException {
         System.out.println("Creating a knn query...");
         BufferedImage image = ImageIO.read(file);
-        Query knnQuery = new KnnQuery(new IndexedObject<Serializable, BufferedImage>(28004, image), 10);
+
+        //Creating a combined query for the results
+        CriteriaBuilderImpl cb = new CriteriaBuilderImpl();
+        CriteriaQuery<ImageModel> criteriaQuery = cb.createQuery(ImageModel.class);
+
+        //Create the Model/Attributes Path
+        Path<ImageModel> model = criteriaQuery.from(ImageModel.class);
+
+        //Create the Query
+        CriteriaQuery query = cb.createQuery().where(
+                cb.similar(model, (new IndexedObject<Serializable, BufferedImage>(28004, image))));
+
         System.out.println("Searching for elements in the engine...");
-        ResultSet<ImageModel> results = e.search(knnQuery);
+        ResultSet<ImageModel> results = e.search(query);
         System.out.println("...done!");
         return results;
     }
