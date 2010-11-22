@@ -48,7 +48,6 @@ import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
 
 import pt.inevo.encontra.descriptors.CompositeDescriptor;
-import pt.inevo.encontra.engine.Engine;
 import pt.inevo.encontra.engine.SimpleEngine;
 import pt.inevo.encontra.engine.SimpleIndexedObjectFactory;
 import pt.inevo.encontra.index.IndexedObject;
@@ -75,7 +74,7 @@ public class EnContRAApplication extends Application {
             setEntityManager(em);
         }
     }
-    private Engine<ImageModel> e = new SimpleEngine<ImageModel>();
+    private SimpleEngine<ImageModel> e = new SimpleEngine<ImageModel>();
     private String[] descriptors = new String[]{"CEDD", "ColorLayout", "Dominant Color",
         "EdgeHistogram", "FCTH", "Scalable Color"};
     private Window main = new Window("EnContRA");
@@ -230,7 +229,7 @@ public class EnContRAApplication extends Application {
 
                 System.out.println("Configuring the Retrieval Engine...");
                 e.setObjectStorage(new ImageStorage());
-                e.setIndexedObjectFactory(new SimpleIndexedObjectFactory());
+                e.getQueryProcessor().setIndexedObjectFactory(new SimpleIndexedObjectFactory());
                 e.setQueryProcessor(new QueryProcessorDefaultImpl<IndexedObject>());
 
                 Runtime.getRuntime().gc();
