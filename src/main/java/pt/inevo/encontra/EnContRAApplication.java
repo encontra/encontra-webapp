@@ -52,7 +52,7 @@ import pt.inevo.encontra.engine.SimpleEngine;
 import pt.inevo.encontra.engine.SimpleIndexedObjectFactory;
 import pt.inevo.encontra.index.IndexedObject;
 import pt.inevo.encontra.common.Result;
-import pt.inevo.encontra.index.ResultSetDefaultImp;
+import pt.inevo.encontra.common.ResultSet;
 import pt.inevo.encontra.index.SimpleIndex;
 import pt.inevo.encontra.lucene.index.LuceneIndex;
 import pt.inevo.encontra.nbtree.index.BTreeIndex;
@@ -381,7 +381,7 @@ public class EnContRAApplication extends Application {
 
             private void queryByExample(File file) throws IOException {
                 resultHolder.removeAllComponents();
-                ResultSetDefaultImp<ImageModel> results = knnQuery(file);
+                ResultSet<ImageModel> results = knnQuery(file);
                 ImageStrip strip = setupImageStrip();
                 resultHolder.addComponent(strip);
                 strip.addListener(new Property.ValueChangeListener() {
@@ -418,7 +418,7 @@ public class EnContRAApplication extends Application {
                         horiz.requestRepaintAll();
                     }
                 });
-                System.out.println("Got " + results.size() + " results!");
+                System.out.println("Got " + results.getSize() + " results!");
                 int i = 0;
                 resultImages.clear();
                 for (Result<ImageModel> r : results) {
@@ -453,7 +453,7 @@ public class EnContRAApplication extends Application {
         return strip;
     }
 
-    private ResultSetDefaultImp<ImageModel> knnQuery(File file) throws IOException {
+    private ResultSet<ImageModel> knnQuery(File file) throws IOException {
         System.out.println("Creating a knn query...");
         BufferedImage image = ImageIO.read(file);
 
@@ -469,7 +469,7 @@ public class EnContRAApplication extends Application {
                 cb.similar(model, (new IndexedObject<Serializable, BufferedImage>(28004, image))));
 
         System.out.println("Searching for elements in the engine...");
-        ResultSetDefaultImp<ImageModel> results = e.search(query);
+        ResultSet<ImageModel> results = e.search(query);
         System.out.println("...done!");
         return results;
     }
