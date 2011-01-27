@@ -1,7 +1,7 @@
 package pt.inevo.encontra;
 
 import pt.inevo.encontra.index.IndexedObject;
-import pt.inevo.encontra.index.ResultSet;
+import pt.inevo.encontra.index.ResultSetDefaultImp;
 import pt.inevo.encontra.nbtree.index.NBTreeSearcher;
 import pt.inevo.encontra.query.Query;
 import pt.inevo.encontra.storage.IEntry;
@@ -13,8 +13,8 @@ import pt.inevo.encontra.storage.IEntry;
 public class SimpleImageSearcher<O extends IndexedObject> extends NBTreeSearcher<O> {
 
     @Override
-    public ResultSet<O> search(Query query) {
-        ResultSet<IEntry> results = new ResultSet<IEntry>();
+    public ResultSetDefaultImp<O> search(Query query) {
+        ResultSetDefaultImp<IEntry> results = new ResultSetDefaultImp<IEntry>();
 
         // TODO implement here this simple image searcher to perform knn
 

@@ -51,8 +51,8 @@ import pt.inevo.encontra.descriptors.CompositeDescriptor;
 import pt.inevo.encontra.engine.SimpleEngine;
 import pt.inevo.encontra.engine.SimpleIndexedObjectFactory;
 import pt.inevo.encontra.index.IndexedObject;
-import pt.inevo.encontra.index.Result;
-import pt.inevo.encontra.index.ResultSet;
+import pt.inevo.encontra.common.Result;
+import pt.inevo.encontra.index.ResultSetDefaultImp;
 import pt.inevo.encontra.index.SimpleIndex;
 import pt.inevo.encontra.lucene.index.LuceneIndex;
 import pt.inevo.encontra.nbtree.index.BTreeIndex;
@@ -381,7 +381,7 @@ public class EnContRAApplication extends Application {
 
             private void queryByExample(File file) throws IOException {
                 resultHolder.removeAllComponents();
-                ResultSet<ImageModel> results = knnQuery(file);
+                ResultSetDefaultImp<ImageModel> results = knnQuery(file);
                 ImageStrip strip = setupImageStrip();
                 resultHolder.addComponent(strip);
                 strip.addListener(new Property.ValueChangeListener() {
@@ -422,8 +422,8 @@ public class EnContRAApplication extends Application {
                 int i = 0;
                 resultImages.clear();
                 for (Result<ImageModel> r : results) {
-                    ImageStrip.Image img = strip.addImage(new FileResource(new File(r.getResult().getFilename()), EnContRAApplication.this));
-                    resultImages.put(img, r.getResult().getFilename());
+                    ImageStrip.Image img = strip.addImage(new FileResource(new File(r.getResultObject().getFilename()), EnContRAApplication.this));
+                    resultImages.put(img, r.getResultObject().getFilename());
                 }
 
                 main.showNotification("Query sucessfully completed");
@@ -453,7 +453,7 @@ public class EnContRAApplication extends Application {
         return strip;
     }
 
-    private ResultSet<ImageModel> knnQuery(File file) throws IOException {
+    private ResultSetDefaultImp<ImageModel> knnQuery(File file) throws IOException {
         System.out.println("Creating a knn query...");
         BufferedImage image = ImageIO.read(file);
 
@@ -469,7 +469,7 @@ public class EnContRAApplication extends Application {
                 cb.similar(model, (new IndexedObject<Serializable, BufferedImage>(28004, image))));
 
         System.out.println("Searching for elements in the engine...");
-        ResultSet<ImageModel> results = e.search(query);
+        ResultSetDefaultImp<ImageModel> results = e.search(query);
         System.out.println("...done!");
         return results;
     }
