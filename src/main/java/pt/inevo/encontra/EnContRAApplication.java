@@ -15,6 +15,10 @@
  */
 package pt.inevo.encontra;
 
+import akka.actor.ActorRef;
+import akka.actor.UntypedActor;
+import akka.actor.UntypedActorFactory;
+import akka.dispatch.Future;
 import com.vaadin.Application;
 import com.vaadin.addon.colorpicker.ColorPicker;
 import com.vaadin.addon.colorpicker.events.ColorChangeEvent;
@@ -29,11 +33,16 @@ import com.vaadin.ui.TextField;
 import com.vaadin.ui.Window;
 import com.vaadin.ui.Window.Notification;
 import org.vaadin.peter.imagestrip.ImageStrip;
+import pt.inevo.encontra.common.DefaultResultProvider;
 import pt.inevo.encontra.convert.SVGConverter;
 import pt.inevo.encontra.descriptors.CompositeDescriptorExtractor;
 import pt.inevo.encontra.geometry.PolygonSet;
 import pt.inevo.encontra.geometry.Polygon;
 import pt.inevo.encontra.image.descriptors.*;
+import pt.inevo.encontra.index.search.AbstractSearcher;
+import pt.inevo.encontra.index.search.ParallelSimpleSearcher;
+import pt.inevo.encontra.nbtree.index.ParallelNBTreeSearcher;
+import pt.inevo.encontra.query.QueryProcessorDefaultParallelImpl;
 import pt.inevo.encontra.service.PolygonDetectionService;
 import pt.inevo.encontra.service.impl.PolygonDetectionServiceImpl;
 
@@ -58,9 +67,15 @@ import pt.inevo.encontra.lucene.index.LuceneIndex;
 import pt.inevo.encontra.nbtree.index.BTreeIndex;
 import pt.inevo.encontra.query.CriteriaQuery;
 import pt.inevo.encontra.query.Path;
-import pt.inevo.encontra.query.QueryProcessorDefaultImpl;
 import pt.inevo.encontra.query.criteria.CriteriaBuilderImpl;
+import pt.inevo.encontra.storage.IEntity;
+import pt.inevo.encontra.storage.IEntry;
 import pt.inevo.encontra.storage.JPAObjectStorage;
+import pt.inevo.encontra.webapp.loader.ImageLoaderActor;
+import pt.inevo.encontra.webapp.loader.ImageModel;
+import pt.inevo.encontra.webapp.loader.ImageModelLoader;
+import pt.inevo.encontra.webapp.loader.Message;
+import scala.Option;
 
 public class EnContRAApplication extends Application {
 
@@ -74,9 +89,18 @@ public class EnContRAApplication extends Application {
             setEntityManager(em);
         }
     }
-    private SimpleEngine<ImageModel> e = new SimpleEngine<ImageModel>();
+
+    public class WebAppEngine <O extends IEntity> extends AbstractSearcher<O> {
+
+        @Override
+        protected Result<O> getResultObject(Result<IEntry> entryresult) {
+            return new Result<O>((O) storage.get(Long.parseLong(entryresult.getResultObject().getId().toString())));
+        }
+    }
+
+    private WebAppEngine<ImageModel> e = new WebAppEngine<ImageModel>();
     private String[] descriptors = new String[]{"CEDD", "ColorLayout", "Dominant Color",
-        "EdgeHistogram", "FCTH", "Scalable Color"};
+            "EdgeHistogram", "FCTH", "Scalable Color"};
     private Window main = new Window("EnContRA");
     private SplitPanel horiz = new SplitPanel();
     private ImageUploader uploader;
@@ -85,6 +109,7 @@ public class EnContRAApplication extends Application {
     private com.vaadin.ui.Label logViewer = new com.vaadin.ui.Label();
     private HashMap<CheckBox, Slider> descriptorsUI = new HashMap<CheckBox, Slider>();
     private HashMap<ImageStrip.Image, String> resultImages = new HashMap<ImageStrip.Image, String>();
+    final Map<String, String> databases = new HashMap<String, String>();
     private static Properties props = new Properties();
 
     @Override
@@ -136,8 +161,6 @@ public class EnContRAApplication extends Application {
         final VerticalLayout configLayout = new VerticalLayout();
         configLayout.setSpacing(true);
         configLayout.setMargin(true, true, true, true);
-
-        final Map<String, String> databases = new HashMap<String, String>();
 
         InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream("databases.properties");
         Properties p = new Properties();
@@ -221,76 +244,7 @@ public class EnContRAApplication extends Application {
 
             public void buttonClick(ClickEvent event) {
 
-                if (indexSelector.getValue() == null || databaseSelector.getValue() == null) {
-                    main.showNotification("You must select a database, an index to be used and at least one descriptor type.",
-                            Notification.TYPE_ERROR_MESSAGE);
-                    return;
-                }
-
-                System.out.println("Configuring the Retrieval Engine...");
-                e.setObjectStorage(new ImageStorage());
-                e.getQueryProcessor().setIndexedObjectFactory(new SimpleIndexedObjectFactory());
-                e.setQueryProcessor(new QueryProcessorDefaultImpl<IndexedObject>());
-
-                Runtime.getRuntime().gc();
-
-                //A searcher for the image content (using only one type of descriptor
-                SimpleImageSearcher imageSearcher = new SimpleImageSearcher();
-
-                //getting the descriptors
-                CompositeDescriptorExtractor compositeImageDescriptorExtractor = new CompositeDescriptorExtractor(IndexedObject.class, null);
-
-                Set<Entry<CheckBox, Slider>> features = descriptorsUI.entrySet();
-                for (Entry<CheckBox, Slider> pair : features) {
-                    if (pair.getKey().getCaption().contains("CEDD") && pair.getKey().booleanValue()) {
-                        compositeImageDescriptorExtractor.addExtractor(new CEDDDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
-                    } else if (pair.getKey().getCaption().contains("ColorLayout") && pair.getKey().booleanValue()) {
-                        compositeImageDescriptorExtractor.addExtractor(new ColorLayoutDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
-                    } else if (pair.getKey().getCaption().contains("Dominant Color") && pair.getKey().booleanValue()) {
-                        compositeImageDescriptorExtractor.addExtractor(new DominantColorDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
-                    } else if (pair.getKey().getCaption().contains("EdgeHistogram") && pair.getKey().booleanValue()) {
-                        compositeImageDescriptorExtractor.addExtractor(new EdgeHistogramDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
-                    } else if (pair.getKey().getCaption().contains("FCTH") && pair.getKey().booleanValue()) {
-                        compositeImageDescriptorExtractor.addExtractor(new FCTHDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
-                    } else if (pair.getKey().getCaption().contains("Scalable Color") && pair.getKey().booleanValue()) {
-                        compositeImageDescriptorExtractor.addExtractor(new ScalableColorDescriptor(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
-                    }
-                }
-
-                imageSearcher.setDescriptorExtractor(compositeImageDescriptorExtractor);
-
-                if (indexSelector.getValue().equals("Btree Index")) { //using a BTreeIndex
-                    imageSearcher.setIndex(new BTreeIndex(CompositeDescriptor.class));
-                } else if (indexSelector.getValue().equals("Lucene Index")) { //using a LuceneIndex
-                    imageSearcher.setIndex(new LuceneIndex("LuceneIndex", CompositeDescriptor.class));
-                } else { //using a SimpleIndex
-                    imageSearcher.setIndex(new SimpleIndex(CompositeDescriptor.class));
-                }
-
-                e.getQueryProcessor().setSearcher(ImageModel.class.getName(),imageSearcher);
-
-                System.out.println("Loading some objects to the test indexes...");
-
-                ImageModelLoader loader = new ImageModelLoader(databases.get(databaseSelector.getValue()));
-
-                loader.load();
-                Iterator<File> it = loader.iterator();
-
-                for (int i = 0; it.hasNext(); i++) {
-                    try {
-                        File f = it.next();
-                        ImageModel im = loader.loadImage(f);
-                        e.insert(im);
-                        logViewer.setValue(logViewer.getValue().toString() + "\n Image processed: " + im.getFilename());
-                    } catch (Exception e) {
-                        System.out.println("Couldn't load the image, because: " + e.toString());
-                        logViewer.setValue(logViewer.getValue().toString() + "\n" + "Couldn't load the image, because: " + e.toString());
-                        continue;
-                    }
-                }
-
-                System.out.println("End of the loading phase...");
-                main.showNotification("Database loading sucessfully finished!");
+                setupEngine(true);
             }
         });
 
@@ -419,7 +373,6 @@ public class EnContRAApplication extends Application {
                     }
                 });
                 System.out.println("Got " + results.getSize() + " results!");
-                int i = 0;
                 resultImages.clear();
                 for (Result<ImageModel> r : results) {
                     ImageStrip.Image img = strip.addImage(new FileResource(new File(r.getResultObject().getFilename()), EnContRAApplication.this));
@@ -433,7 +386,168 @@ public class EnContRAApplication extends Application {
 
         root.addComponent(h);
 
+        loadConfig();
+
         setTheme("mytheme");
+    }
+
+    private void setupEngine(boolean load){
+        if (indexSelector.getValue() == null || databaseSelector.getValue() == null) {
+            main.showNotification("You must select a database, an index to be used and at least one descriptor type.",
+                    Notification.TYPE_ERROR_MESSAGE);
+            return;
+        }
+
+        InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream("config.properties");
+        Properties p = new Properties();
+
+        System.out.println("Configuring the Retrieval Engine...");
+        e.setObjectStorage(new ImageStorage());
+        e.setQueryProcessor(new QueryProcessorDefaultParallelImpl());
+        e.getQueryProcessor().setIndexedObjectFactory(new SimpleIndexedObjectFactory());
+        e.setResultProvider(new DefaultResultProvider());
+
+        //A searcher for the image content (using the selected descriptors)
+        AbstractSearcher imageSearcher = null;
+        if (indexSelector.getValue().equals("Lucene Index"))
+            imageSearcher = new ParallelSimpleSearcher();
+        else imageSearcher = new ParallelNBTreeSearcher();
+        imageSearcher.setQueryProcessor(new QueryProcessorDefaultParallelImpl());
+        imageSearcher.setResultProvider(new DefaultResultProvider());
+
+        //getting the descriptors
+        CompositeDescriptorExtractor compositeImageDescriptorExtractor = new CompositeDescriptorExtractor(IndexedObject.class, null);
+
+        String descriptors = "";
+        Set<Entry<CheckBox, Slider>> features = descriptorsUI.entrySet();
+        for (Entry<CheckBox, Slider> pair : features) {
+            if (pair.getKey().getCaption().contains("CEDD") && pair.getKey().booleanValue()) {
+                descriptors += "CEDD,";
+                compositeImageDescriptorExtractor.addExtractor(new CEDDDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+            } else if (pair.getKey().getCaption().contains("ColorLayout") && pair.getKey().booleanValue()) {
+                descriptors += "ColorLayout,";
+                compositeImageDescriptorExtractor.addExtractor(new ColorLayoutDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+            } else if (pair.getKey().getCaption().contains("Dominant Color") && pair.getKey().booleanValue()) {
+                descriptors += "Dominant Color,";
+                compositeImageDescriptorExtractor.addExtractor(new DominantColorDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+            } else if (pair.getKey().getCaption().contains("EdgeHistogram") && pair.getKey().booleanValue()) {
+                descriptors += "EdgeHistogram,";
+                compositeImageDescriptorExtractor.addExtractor(new EdgeHistogramDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+            } else if (pair.getKey().getCaption().contains("FCTH") && pair.getKey().booleanValue()) {
+                descriptors += "FCTH,";
+                compositeImageDescriptorExtractor.addExtractor(new FCTHDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+            } else if (pair.getKey().getCaption().contains("Scalable Color") && pair.getKey().booleanValue()) {
+                descriptors += "Scalable Color,";
+                compositeImageDescriptorExtractor.addExtractor(new ScalableColorDescriptor(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+            }
+        }
+        //take the "," from the last position
+        descriptors = descriptors.substring(0, descriptors.length()-1);
+
+        p.put("descriptors", descriptors);
+
+        imageSearcher.setDescriptorExtractor(compositeImageDescriptorExtractor);
+
+        String index = "";
+        if (indexSelector.getValue().equals("Btree Index")) { //using a BTreeIndex
+            index = "Btree Index";
+            imageSearcher.setIndex(new BTreeIndex("webappBTree", CompositeDescriptor.class));
+        } else if (indexSelector.getValue().equals("Lucene Index")) { //using a LuceneIndex
+            index = "Lucene Index";
+            imageSearcher.setIndex(new LuceneIndex("LuceneIndex", CompositeDescriptor.class));
+            imageSearcher.setDescriptorExtractor(compositeImageDescriptorExtractor);
+        } else { //using a SimpleIndex
+            index = "SimpleIndex";
+            imageSearcher.setIndex(new SimpleIndex(CompositeDescriptor.class));
+        }
+
+        p.put("index", index);
+
+        p.put("database", databaseSelector.getValue());
+
+        try {
+            OutputStream out = new FileOutputStream(new File("config.properties"));
+            p.store(out, "");
+            System.out.println("Properties file saved!");
+        } catch (FileNotFoundException e1) {
+            e1.printStackTrace();
+        } catch (IOException e1) {
+            e1.printStackTrace();
+        }
+
+        e.getQueryProcessor().setSearcher("image", imageSearcher);
+
+        System.out.println("Loading some objects to the test indexes...");
+
+        if (load)
+            load(databases.get(databaseSelector.getValue()));
+
+        System.out.println("End of the loading phase...");
+        main.showNotification("Database loading sucessfully finished!");
+    }
+
+    private void loadConfig(){
+        InputStream inputStream = null;
+        Properties p = new Properties();
+        try {
+            inputStream = new FileInputStream(new File("config.properties"));
+            p.load(inputStream);
+        } catch (FileNotFoundException e1) {
+            e1.printStackTrace();
+            return;
+        } catch (IOException e1) {
+            e1.printStackTrace();
+            return;
+        }
+
+        String index = p.getProperty("index");
+        String [] descriptors = p.getProperty("descriptors").split(",");
+        String database = p.getProperty("database");
+
+        databaseSelector.setValue(database);
+        indexSelector.setValue(index);
+
+        Set<CheckBox> checkBoxes = descriptorsUI.keySet();
+        for (CheckBox check : checkBoxes) {
+            for (String desc: descriptors) {
+                if (desc.equals(check.getCaption())) {
+                    check.setValue(true);
+                    descriptorsUI.get(check).setEnabled(true);
+                    break;
+                }
+            }
+        }
+
+        setupEngine(false);
+    }
+
+    private void load(String databaseFolder) {
+        System.out.println("Loading some objects to the test indexes...");
+        ImageModelLoader loader = new ImageModelLoader(databaseFolder);
+        loader.scan();
+
+        ActorRef loaderActor = UntypedActor.actorOf(new UntypedActorFactory() {
+            @Override
+            public UntypedActor create() {
+                return new ImageLoaderActor(e);
+            }
+        }).start();
+
+        Message m = new Message();
+        m.operation = "PROCESSALL";
+        m.obj = loader;
+
+        Future future = loaderActor.sendRequestReplyFuture(m, Long.MAX_VALUE, null);
+        future.await();
+        if (future.isCompleted()) {
+            Option resultOption = future.result();
+            if (resultOption.isDefined()) {
+                Object result = resultOption.get();
+                System.out.println("Database Processed: " + result);
+            } else {
+                System.out.println("There where an error processing the database!");
+            }
+        }
     }
 
     private ImageStrip setupImageStrip() {
@@ -441,7 +555,7 @@ public class EnContRAApplication extends Application {
         strip.setHeight(150, ImageStrip.UNITS_PIXELS);
         strip.setWidth(100, ImageStrip.UNITS_PERCENTAGE);
         strip.setAnimated(true);
-        strip.setMaxAllowed(5);
+        strip.setMaxAllowed(7);
         // Make strip to behave like select
         strip.setSelectable(true);
         //size of the surrounding boxes
@@ -463,14 +577,15 @@ public class EnContRAApplication extends Application {
 
         //Create the Model/Attributes Path
         Path<ImageModel> model = criteriaQuery.from(ImageModel.class);
+        Path imageModel = model.get("image");
 
         //Create the Query
         CriteriaQuery query = cb.createQuery().where(
-                cb.similar(model, (new IndexedObject<Serializable, BufferedImage>(28004, image))));
+                cb.similar(imageModel, image)).distinct(true).limit(10);
 
         System.out.println("Searching for elements in the engine...");
         ResultSet<ImageModel> results = e.search(query);
-        System.out.println("...done!");
+        System.out.println("...done! Query returned: " + results.getSize() + " results.");
         return results;
     }
 }

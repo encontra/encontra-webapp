@@ -2,12 +2,31 @@ package pt.inevo.encontra.util;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Class for doing some operations with files.
+ * Object that can find all the files in a directory with a given extension.
  * @author Ricardo
  */
 public class FileUtil {
+
+    /**
+     * Find all the files within a directory (or subdirectory) with a given extension.
+     * @param directory the root of the directory we want to search
+     * @param extensions the file extensions we are looking for
+     * @return
+     */
+    public static List<File> findFilesRecursively(File directory, String[] extensions) {
+        List<File> list = new ArrayList<File>();
+        if (directory.isFile()) {
+            if (hasExtension(directory, extensions)) {
+                list.add(directory);
+            }
+            return list;
+        }
+        addFilesRecursevely(list, directory, extensions);
+        return list;
+    }
 
     private static boolean hasExtension(File f, String[] extensions) {
         int sz = extensions.length;
@@ -22,19 +41,7 @@ public class FileUtil {
         return false;
     }
 
-    public static java.util.List<File> findFilesRecursively(File directory, String[] extensions) {
-        java.util.List<File> list = new ArrayList<File>();
-        if (directory.isFile()) {
-            if (hasExtension(directory, extensions)) {
-                list.add(directory);
-            }
-            return list;
-        }
-        addFilesRecursevely(list, directory, extensions);
-        return list;
-    }
-
-    private static void addFilesRecursevely(java.util.List<File> found, File rootDir, String[] extensions) {
+    private static void addFilesRecursevely(List<File> found, File rootDir, String[] extensions) {
         if (rootDir == null) {
             return; // we do not want waste time
         }

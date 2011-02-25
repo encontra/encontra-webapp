@@ -1,26 +1,27 @@
-package pt.inevo.encontra;
+package pt.inevo.encontra.webapp.loader;
 
 import java.awt.image.BufferedImage;
-import java.io.Serializable;
-import pt.inevo.encontra.index.annotation.Indexed;
-import pt.inevo.encontra.storage.IEntity;
-
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import javax.persistence.Transient;
+import pt.inevo.encontra.index.annotation.Indexed;
+import pt.inevo.encontra.storage.IEntity;
 
 @Entity
-public class ImageModel implements IEntity<Long>, Serializable {
+public class ImageModel implements IEntity<Long> {
 
     @Id
     @GeneratedValue
     private Long id;
+
     private String filename;
     private String description;
 
     @Transient
     private BufferedImage image;
+
+    private String category;
 
     public ImageModel() {
     }
@@ -41,7 +42,7 @@ public class ImageModel implements IEntity<Long>, Serializable {
         this.id = id;
     }
 
-//    @Indexed
+    @Indexed
     public String getFilename() {
         return filename;
     }
@@ -50,7 +51,7 @@ public class ImageModel implements IEntity<Long>, Serializable {
         this.filename = filename;
     }
 
-//    @Indexed
+    @Indexed
     public String getDescription() {
         return description;
     }
@@ -68,12 +69,21 @@ public class ImageModel implements IEntity<Long>, Serializable {
         this.image = image;
     }
 
+    public String getCategory(){
+        return this.category;
+    }
+
+    public void setCategory(String category){
+        this.category = category;
+    }
+
     @Override
     public String toString() {
         return "TestModel{"
                 + "id=" + id
-                + ", title='" + filename + '\''
+                + ", filename='" + filename + '\''
                 + ", content='" + description + '\''
+                + ", category='" + category.toString() + '\''
                 + '}';
     }
 }

@@ -44,7 +44,7 @@
                             <!-- On Mac running Snow Leopard, add "-d32" -->
                             <!-- This causes error messages (but build works) in phase "package": two processes would use the same debug port -->
                             <!--extraJvmArgs>-Xmx512M -Xss1024k -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=8998</extraJvmArgs-->
-                            <extraJvmArgs>-Xmx512M -Xss1024k</extraJvmArgs>
+                            <extraJvmArgs>-Xmx800M -Xss1024k</extraJvmArgs>
                             <runTarget>clean</runTarget>
                             <hostedWebapp>${project.build.directory}/${project.build.finalName}</hostedWebapp>
                             <noServer>true</noServer>
@@ -259,7 +259,6 @@
             <version>2.0.0</version>
         </dependency>
     </dependencies>
-
 </project>
 
 
