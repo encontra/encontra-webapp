@@ -55,9 +55,11 @@ import javax.imageio.ImageIO;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.criteria.Expression;
+import javax.persistence.criteria.Root;
 
 import pt.inevo.encontra.descriptors.CompositeDescriptor;
-import pt.inevo.encontra.engine.SimpleEngine;
 import pt.inevo.encontra.engine.SimpleIndexedObjectFactory;
 import pt.inevo.encontra.index.IndexedObject;
 import pt.inevo.encontra.common.Result;
@@ -93,8 +95,12 @@ public class EnContRAApplication extends Application {
     public class WebAppEngine <O extends IEntity> extends AbstractSearcher<O> {
 
         @Override
-        protected Result<O> getResultObject(Result<IEntry> entryresult) {
-            return new Result<O>((O) storage.get(Long.parseLong(entryresult.getResultObject().getId().toString())));
+        protected Result<O> getResultObject(Result<IEntry> entryresult, String criteria) {
+            Object result = storage.get(Long.parseLong(entryresult.getResultObject().getId().toString()), criteria);
+            if (result != null) {
+                return new Result<O>((O) result);
+            }
+            return null;
         }
     }
 
@@ -106,11 +112,13 @@ public class EnContRAApplication extends Application {
     private ImageUploader uploader;
     private ComboBox databaseSelector = new ComboBox("");
     private ComboBox indexSelector = new ComboBox();
+    private TextField keywords;
     private com.vaadin.ui.Label logViewer = new com.vaadin.ui.Label();
     private HashMap<CheckBox, Slider> descriptorsUI = new HashMap<CheckBox, Slider>();
     private HashMap<ImageStrip.Image, String> resultImages = new HashMap<ImageStrip.Image, String>();
     final Map<String, String> databases = new HashMap<String, String>();
     private static Properties props = new Properties();
+    private ImageStorage storage;
 
     @Override
     public void init() {
@@ -290,7 +298,7 @@ public class EnContRAApplication extends Application {
         root.addComponent(tabsheet);
 
         HorizontalLayout h = new HorizontalLayout();
-        TextField keywords = new TextField();
+        keywords = new TextField();
         keywords.setColumns(40);
         h.addComponent(keywords);
 
@@ -402,7 +410,8 @@ public class EnContRAApplication extends Application {
         Properties p = new Properties();
 
         System.out.println("Configuring the Retrieval Engine...");
-        e.setObjectStorage(new ImageStorage());
+        storage = new ImageStorage();
+        e.setObjectStorage(storage);
         e.setQueryProcessor(new QueryProcessorDefaultParallelImpl());
         e.getQueryProcessor().setIndexedObjectFactory(new SimpleIndexedObjectFactory());
         e.setResultProvider(new DefaultResultProvider());
@@ -579,12 +588,30 @@ public class EnContRAApplication extends Application {
         Path<ImageModel> model = criteriaQuery.from(ImageModel.class);
         Path imageModel = model.get("image");
 
-        //Create the Query
-        CriteriaQuery query = cb.createQuery().where(
-                cb.similar(imageModel, image)).distinct(true).limit(10);
+        String storageQuery = "";
+        String keywordsStr = keywords.getValue().toString();
+        if (!keywordsStr.equals("")) {
+            String [] keywordsSplit = keywordsStr.split(",");
+            for (int i = 0; i < keywordsSplit.length ; i++) {
+                storageQuery += "category like '%" + keywordsSplit[i].toLowerCase() + "%' ";
+                if (i+1 < keywordsSplit.length)
+                    storageQuery += "or ";
+            }
+        }
 
-        System.out.println("Searching for elements in the engine...");
-        ResultSet<ImageModel> results = e.search(query);
+        CriteriaQuery query = null;
+        ResultSet<ImageModel> results = null;
+        if (!keywordsStr.equals("")) {
+            query = cb.createQuery().where(
+                    cb.similar(imageModel, image)).distinct(true).limit(10);
+            results = e.search(query, storageQuery);
+        } else {
+            //Create the Query
+            query = cb.createQuery().where(
+                    cb.similar(imageModel, image)).distinct(true).limit(10);
+            results = e.search(query);
+        }
+
         System.out.println("...done! Query returned: " + results.getSize() + " results.");
         return results;
     }

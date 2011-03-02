@@ -69,6 +69,7 @@ public class ImageModel implements IEntity<Long> {
         this.image = image;
     }
 
+    //@Indexed - we don't need to index this
     public String getCategory(){
         return this.category;
     }

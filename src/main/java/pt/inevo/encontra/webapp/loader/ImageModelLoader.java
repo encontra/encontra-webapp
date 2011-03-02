@@ -45,6 +45,7 @@ public class ImageModelLoader {
         //get the description
         String name = image.getName();
         im.setDescription(annotations.get(name));
+        im.setCategory(im.getDescription());
 
         //get the bufferedimage
         try {
