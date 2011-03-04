@@ -43,7 +43,7 @@ public class ImageModelLoader {
         im.setId(idCount++);
 
         //get the description
-        String name = image.getName();
+        String name = image.getParentFile().getName() + "/" + image.getName();
         im.setDescription(annotations.get(name));
         im.setCategory(im.getDescription());
 
@@ -76,7 +76,8 @@ public class ImageModelLoader {
                 while ((line = reader.readLine()) != null) {
                     String[] parts = line.split(" ");
                     String[] name = parts[0].split("/");
-                    annotations.put(name[1] + ".jpg", line);
+//                    annotations.put(name[1] + ".jpg", line);
+                    annotations.put(parts[0] + ".jpg", line);
                 }
             }
         } catch (IOException ex) {

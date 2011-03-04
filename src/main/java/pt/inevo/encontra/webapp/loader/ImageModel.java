@@ -84,7 +84,7 @@ public class ImageModel implements IEntity<Long> {
                 + "id=" + id
                 + ", filename='" + filename + '\''
                 + ", content='" + description + '\''
-                + ", category='" + category.toString() + '\''
+                + ", category='" + category + '\''
                 + '}';
     }
 }

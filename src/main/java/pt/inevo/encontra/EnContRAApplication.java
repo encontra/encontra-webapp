@@ -43,6 +43,7 @@ import pt.inevo.encontra.index.search.AbstractSearcher;
 import pt.inevo.encontra.index.search.ParallelSimpleSearcher;
 import pt.inevo.encontra.nbtree.index.ParallelNBTreeSearcher;
 import pt.inevo.encontra.query.QueryProcessorDefaultParallelImpl;
+import pt.inevo.encontra.query.criteria.StorageCriteria;
 import pt.inevo.encontra.service.PolygonDetectionService;
 import pt.inevo.encontra.service.impl.PolygonDetectionServiceImpl;
 
@@ -95,12 +96,9 @@ public class EnContRAApplication extends Application {
     public class WebAppEngine <O extends IEntity> extends AbstractSearcher<O> {
 
         @Override
-        protected Result<O> getResultObject(Result<IEntry> entryresult, String criteria) {
-            Object result = storage.get(Long.parseLong(entryresult.getResultObject().getId().toString()), criteria);
-            if (result != null) {
-                return new Result<O>((O) result);
-            }
-            return null;
+        protected Result<O> getResultObject(Result<IEntry> entryresult) {
+            Object result = storage.get(Long.parseLong(entryresult.getResultObject().getId().toString()));
+            return new Result<O>((O) result);
         }
     }
 
@@ -385,6 +383,7 @@ public class EnContRAApplication extends Application {
                 for (Result<ImageModel> r : results) {
                     ImageStrip.Image img = strip.addImage(new FileResource(new File(r.getResultObject().getFilename()), EnContRAApplication.this));
                     resultImages.put(img, r.getResultObject().getFilename());
+                    System.out.println(r);
                 }
 
                 main.showNotification("Query sucessfully completed");
@@ -414,6 +413,7 @@ public class EnContRAApplication extends Application {
         e.setObjectStorage(storage);
         e.setQueryProcessor(new QueryProcessorDefaultParallelImpl());
         e.getQueryProcessor().setIndexedObjectFactory(new SimpleIndexedObjectFactory());
+        e.getQueryProcessor().setTopSearcher(e);
         e.setResultProvider(new DefaultResultProvider());
 
         //A searcher for the image content (using the selected descriptors)
@@ -595,23 +595,18 @@ public class EnContRAApplication extends Application {
             for (int i = 0; i < keywordsSplit.length ; i++) {
                 storageQuery += "category like '%" + keywordsSplit[i].toLowerCase() + "%' ";
                 if (i+1 < keywordsSplit.length)
-                    storageQuery += "or ";
+                    storageQuery += "and ";
             }
         }
 
-        CriteriaQuery query = null;
+        CriteriaQuery query = cb.createQuery().where(
+                    cb.similar(imageModel, image)).distinct(true).limit(10);
         ResultSet<ImageModel> results = null;
         if (!keywordsStr.equals("")) {
-            query = cb.createQuery().where(
-                    cb.similar(imageModel, image)).distinct(true).limit(10);
-            results = e.search(query, storageQuery);
-        } else {
-            //Create the Query
-            query = cb.createQuery().where(
-                    cb.similar(imageModel, image)).distinct(true).limit(10);
-            results = e.search(query);
+            query.setCriteria(new StorageCriteria(storageQuery));
         }
 
+        results = e.search(query);
         System.out.println("...done! Query returned: " + results.getSize() + " results.");
         return results;
     }
