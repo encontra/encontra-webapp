@@ -25,14 +25,14 @@ public class ImageUploader extends CustomComponent
     private Upload upload;
 
     public ImageUploader() {
-        root = new Panel("My Upload Component");
+        root = new Panel("Query by example");
         setCompositionRoot(root);
         // Create the Upload component.
 
         final Upload upload = new Upload(null, this);
         upload.setImmediate(true);
         // Use a custom button caption instead of plain "Upload".
-        upload.setButtonCaption("Upload Now");
+        upload.setButtonCaption("Upload image");
         // Listen for events regarding the success of upload.
         upload.addListener((Upload.SucceededListener) this);
         upload.addListener((Upload.FailedListener) this);
@@ -46,7 +46,6 @@ public class ImageUploader extends CustomComponent
         imagePanel.addComponent(
                 new Label("No image uploaded yet"));
         root.addComponent(imagePanel);
-
     }
 
     public void uploadStarted(Upload.StartedEvent event) {
@@ -89,19 +88,14 @@ public class ImageUploader extends CustomComponent
     }
     // This is called if the upload is finished.
     public void uploadSucceeded(Upload.SucceededEvent event) {
-        // Log the upload on screen.
-        root.addComponent(new Label("File " + event.getFilename()
-                + " of type '" + event.getMIMEType()
-                + "' uploaded."));
-
         // Display the uploaded file in the image panel.
         final FileResource imageResource =
                 new FileResource(file, getApplication());
         imagePanel.removeAllComponents();
         Embedded img=new Embedded("", imageResource);
-//        img.setWidth("300");
-        img.setHeight("300");
+        img.setHeight("230");
         imagePanel.addComponent(img);
+        imagePanel.setSizeFull();
     }
 
     // This is called if the upload fails.
@@ -114,6 +108,18 @@ public class ImageUploader extends CustomComponent
 
     public File getFile() {
         return file;
+    }
+
+    public void setFile(File file) {
+        this.file = file;
+        // Display the uploaded file in the image panel.
+        final FileResource imageResource =
+                new FileResource(file, getApplication());
+        imagePanel.removeAllComponents();
+        Embedded img=new Embedded("", imageResource);
+        img.setHeight("230");
+        imagePanel.addComponent(img);
+        imagePanel.setSizeFull();
     }
     
     public BufferedImage getImage() {

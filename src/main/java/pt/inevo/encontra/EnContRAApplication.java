@@ -29,6 +29,7 @@ import com.vaadin.ui.*;
 import com.vaadin.ui.AbstractSelect.Filtering;
 import com.vaadin.ui.Button;
 import com.vaadin.ui.Button.ClickEvent;
+import com.vaadin.ui.Label;
 import com.vaadin.ui.TextField;
 import com.vaadin.ui.Window;
 import com.vaadin.ui.Window.Notification;
@@ -56,9 +57,6 @@ import javax.imageio.ImageIO;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
-import javax.persistence.criteria.CriteriaBuilder;
-import javax.persistence.criteria.Expression;
-import javax.persistence.criteria.Root;
 
 import pt.inevo.encontra.descriptors.CompositeDescriptor;
 import pt.inevo.encontra.engine.SimpleIndexedObjectFactory;
@@ -113,7 +111,7 @@ public class EnContRAApplication extends Application {
     private TextField keywords;
     private com.vaadin.ui.Label logViewer = new com.vaadin.ui.Label();
     private HashMap<CheckBox, Slider> descriptorsUI = new HashMap<CheckBox, Slider>();
-    private HashMap<ImageStrip.Image, String> resultImages = new HashMap<ImageStrip.Image, String>();
+    private HashMap<ImageStrip.Image, ImageModel> resultImages = new HashMap<ImageStrip.Image, ImageModel>();
     final Map<String, String> databases = new HashMap<String, String>();
     private static Properties props = new Properties();
     private ImageStorage storage;
@@ -157,7 +155,7 @@ public class EnContRAApplication extends Application {
             }
         });
         uploader = new ImageUploader();
-        uploader.setHeight(450, ImageUploader.UNITS_PIXELS);
+        uploader.setHeight(400, ImageUploader.UNITS_PIXELS);
 
         final SplitPanel configPanel = new SplitPanel();
         configPanel.setMargin(true, true, true, true);
@@ -168,7 +166,7 @@ public class EnContRAApplication extends Application {
         configLayout.setSpacing(true);
         configLayout.setMargin(true, true, true, true);
 
-        InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream("databases.properties");
+        InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream(CommonInfo.DATABASE_CONFIG_FILE);
         Properties p = new Properties();
         try {
             p.load(inputStream);
@@ -283,9 +281,14 @@ public class EnContRAApplication extends Application {
         horiz.setSplitPosition(50); // percent
         horiz.setHeight(450, VerticalLayout.UNITS_PIXELS);
 
-        horiz.addComponent(uploader);
+        VerticalLayout vl = new VerticalLayout();
+        vl.setMargin(new Layout.MarginInfo(true, true, true, true));
+        vl.addComponent(uploader);
+        horiz.addComponent(vl);
+
         VerticalLayout v = new VerticalLayout();
-        v.addComponent(new com.vaadin.ui.Label("Select an image from the strip to display it here."));
+        v.addComponent(new com.vaadin.ui.Label("Select an image from above to display it here."));
+        v.setMargin(new Layout.MarginInfo(true, true, true, true));
         horiz.addComponent(v);
 
         final TabSheet tabsheet = new TabSheet();
@@ -300,15 +303,15 @@ public class EnContRAApplication extends Application {
         keywords.setColumns(40);
         h.addComponent(keywords);
 
-        final Button b = new Button("Search");
-        main.addComponent(b);
+        final Button searchButton = new Button("Search");
+        main.addComponent(searchButton);
 
         final HorizontalLayout resultHolder = new HorizontalLayout();
         resultHolder.setHeight(150, ImageStrip.UNITS_PIXELS);
         resultHolder.setWidth(100, ImageStrip.UNITS_PERCENTAGE);
         root.addComponent(resultHolder);
 
-        b.addListener(new Button.ClickListener() {
+        searchButton.addListener(new Button.ClickListener() {
 
             public void buttonClick(Button.ClickEvent clickEvent) {
                 File file = null;
@@ -330,7 +333,7 @@ public class EnContRAApplication extends Application {
                 if (file != null) {
                     try {
                         queryByExample(file);
-
+                        resetQBEHorizPanel();
                     } catch (IOException ex) {
                         ex.printStackTrace();
                         main.showNotification("There was an error when performing the query, please re-try!",
@@ -340,8 +343,12 @@ public class EnContRAApplication extends Application {
             }
 
             private void queryByExample(File file) throws IOException {
+                //remove all previous results
                 resultHolder.removeAllComponents();
+
+                //get all the results
                 ResultSet<ImageModel> results = knnQuery(file);
+
                 ImageStrip strip = setupImageStrip();
                 resultHolder.addComponent(strip);
                 strip.addListener(new Property.ValueChangeListener() {
@@ -349,9 +356,12 @@ public class EnContRAApplication extends Application {
                     @Override
                     public void valueChange(ValueChangeEvent event) {
                         final ImageStrip.Image img = (ImageStrip.Image) event.getProperty().getValue();
-                        Embedded e = new Embedded("", new FileResource(new File(resultImages.get(img)), EnContRAApplication.this));
-                        e.setHeight("300");
+                        ImageModel selectedModel = resultImages.get(img);
+
+                        Embedded e = new Embedded("", new FileResource(new File(selectedModel.getFilename()), EnContRAApplication.this));
+                        e.setHeight("250");
                         VerticalLayout v = new VerticalLayout();
+                        v.setMargin(new Layout.MarginInfo(true, true, true, true));
                         v.setSpacing(true);
                         Button findSimilar = new Button("Find similar");
                         findSimilar.addListener(new Button.ClickListener() {
@@ -359,11 +369,12 @@ public class EnContRAApplication extends Application {
                             @Override
                             public void buttonClick(ClickEvent event) {
                                 try {
-                                    queryByExample(new File(resultImages.get(img)));
-                                    horiz.removeComponent(horiz.getSecondComponent());
-                                    VerticalLayout v = new VerticalLayout();
-                                    v.addComponent(new com.vaadin.ui.Label("Select an image from the strip to display it here."));
-                                    horiz.addComponent(v);
+                                    String filename = resultImages.get(img).getFilename();
+                                    File f = new File(filename);
+                                    uploader.setFile(f);
+                                    queryByExample(f);
+                                    resetQBEHorizPanel();
+
                                 } catch (IOException ex) {
                                     ex.printStackTrace();
                                     main.showNotification("There was an error when performing the query, please re-try!",
@@ -373,29 +384,56 @@ public class EnContRAApplication extends Application {
                         });
                         v.addComponent(findSimilar);
                         v.addComponent(e);
-                        horiz.removeComponent(horiz.getSecondComponent());
+
+                        HorizontalLayout fileNameLayout = new HorizontalLayout();
+                        Label filenameLabel = new Label();
+                        filenameLabel.setCaption("Filename: ");
+                        filenameLabel.setValue(selectedModel.getFilename());
+                        fileNameLayout.addComponent(filenameLabel);
+
+                        HorizontalLayout categoryLayout = new HorizontalLayout();
+                        Label categoryLabel = new Label();
+                        categoryLabel.setCaption("Category: ");
+                        categoryLabel.setValue(selectedModel.getCategory());
+                        categoryLayout.addComponent(categoryLabel);
+
+                        v.addComponent(fileNameLayout);
+                        v.addComponent(categoryLayout);
+
+                        if (horiz.getSecondComponent() != null){
+                            horiz.removeComponent(horiz.getSecondComponent());
+                        }
                         horiz.addComponent(v);
-                        horiz.requestRepaintAll();
                     }
                 });
-                System.out.println("Got " + results.getSize() + " results!");
+
                 resultImages.clear();
                 for (Result<ImageModel> r : results) {
                     ImageStrip.Image img = strip.addImage(new FileResource(new File(r.getResultObject().getFilename()), EnContRAApplication.this));
-                    resultImages.put(img, r.getResultObject().getFilename());
-                    System.out.println(r);
+                    //to keep track of which image was selected and display it later
+                    resultImages.put(img, r.getResultObject());
                 }
-
-                main.showNotification("Query sucessfully completed");
             }
         });
-        h.addComponent(b);
+        h.addComponent(searchButton);
 
         root.addComponent(h);
 
         loadConfig();
 
         setTheme("mytheme");
+    }
+
+    //resets the second component of the horizontal panel
+    private void resetQBEHorizPanel(){
+        if (horiz.getSecondComponent() != null){
+            horiz.removeComponent(horiz.getSecondComponent());
+            VerticalLayout v = new VerticalLayout();
+            v.addComponent(new com.vaadin.ui.Label("Select an image from above to display it here."));
+            v.setMargin(new Layout.MarginInfo(true, true, true, true));
+            horiz.addComponent(v);
+            horiz.requestRepaint();
+        }
     }
 
     private void setupEngine(boolean load){
@@ -405,7 +443,6 @@ public class EnContRAApplication extends Application {
             return;
         }
 
-        InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream("config.properties");
         Properties p = new Properties();
 
         System.out.println("Configuring the Retrieval Engine...");
@@ -453,7 +490,7 @@ public class EnContRAApplication extends Application {
         //take the "," from the last position
         descriptors = descriptors.substring(0, descriptors.length()-1);
 
-        p.put("descriptors", descriptors);
+        p.put(CommonInfo.CONFIG_FILE_DESCRIPTORS_PROPERTY, descriptors);
 
         imageSearcher.setDescriptorExtractor(compositeImageDescriptorExtractor);
 
@@ -470,13 +507,13 @@ public class EnContRAApplication extends Application {
             imageSearcher.setIndex(new SimpleIndex(CompositeDescriptor.class));
         }
 
-        p.put("index", index);
+        p.put(CommonInfo.CONFIG_FILE_INDEX_PROPERTY, index);
 
-        p.put("database", databaseSelector.getValue());
+        p.put(CommonInfo.CONFIG_FILE_DATABASE_PROPERTY, databaseSelector.getValue());
 
         try {
-            OutputStream out = new FileOutputStream(new File("config.properties"));
-            p.store(out, "");
+            OutputStream out = new FileOutputStream(new File(CommonInfo.CONFIG_FILE));
+            p.store(out, "EnContRAAplication configuration file");
             System.out.println("Properties file saved!");
         } catch (FileNotFoundException e1) {
             e1.printStackTrace();
@@ -495,11 +532,12 @@ public class EnContRAApplication extends Application {
         main.showNotification("Database loading sucessfully finished!");
     }
 
+    //load configuration file
     private void loadConfig(){
         InputStream inputStream = null;
         Properties p = new Properties();
         try {
-            inputStream = new FileInputStream(new File("config.properties"));
+            inputStream = new FileInputStream(new File(CommonInfo.CONFIG_FILE));
             p.load(inputStream);
         } catch (FileNotFoundException e1) {
             e1.printStackTrace();
@@ -509,9 +547,9 @@ public class EnContRAApplication extends Application {
             return;
         }
 
-        String index = p.getProperty("index");
-        String [] descriptors = p.getProperty("descriptors").split(",");
-        String database = p.getProperty("database");
+        String index = p.getProperty(CommonInfo.CONFIG_FILE_INDEX_PROPERTY);
+        String [] descriptors = p.getProperty(CommonInfo.CONFIG_FILE_DESCRIPTORS_PROPERTY).split(",");
+        String database = p.getProperty(CommonInfo.CONFIG_FILE_DATABASE_PROPERTY);
 
         databaseSelector.setValue(database);
         indexSelector.setValue(index);
@@ -530,6 +568,7 @@ public class EnContRAApplication extends Application {
         setupEngine(false);
     }
 
+    //load the image database
     private void load(String databaseFolder) {
         System.out.println("Loading some objects to the test indexes...");
         ImageModelLoader loader = new ImageModelLoader(databaseFolder);
@@ -559,12 +598,13 @@ public class EnContRAApplication extends Application {
         }
     }
 
+    //setups the image strip
     private ImageStrip setupImageStrip() {
         final ImageStrip strip = new ImageStrip(ImageStrip.Alignment.HORIZONTAL);
         strip.setHeight(150, ImageStrip.UNITS_PIXELS);
         strip.setWidth(100, ImageStrip.UNITS_PERCENTAGE);
         strip.setAnimated(true);
-        strip.setMaxAllowed(7);
+        strip.setMaxAllowed(10);
         // Make strip to behave like select
         strip.setSelectable(true);
         //size of the surrounding boxes
@@ -576,6 +616,7 @@ public class EnContRAApplication extends Application {
         return strip;
     }
 
+    //creates and performs a knn query to the engine
     private ResultSet<ImageModel> knnQuery(File file) throws IOException {
         System.out.println("Creating a knn query...");
         BufferedImage image = ImageIO.read(file);
@@ -600,14 +641,23 @@ public class EnContRAApplication extends Application {
         }
 
         CriteriaQuery query = cb.createQuery().where(
-                    cb.similar(imageModel, image)).distinct(true).limit(10);
+                cb.similar(imageModel, image)).distinct(true).limit(10);
         ResultSet<ImageModel> results = null;
         if (!keywordsStr.equals("")) {
             query.setCriteria(new StorageCriteria(storageQuery));
         }
 
         results = e.search(query);
+        printResults(results);
         System.out.println("...done! Query returned: " + results.getSize() + " results.");
         return results;
+    }
+
+    //print the results
+    private void printResults(ResultSet<ImageModel> set){
+        System.out.println("Results:");
+        for (Result<ImageModel> r: set){
+            System.out.println(r);
+        }
     }
 }
