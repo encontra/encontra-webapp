@@ -18,7 +18,7 @@ import java.util.List;
  * Loader for Objects of the type: ImageModel.
  * @author Ricardo
  */
-public class ImageModelLoader {
+public class CmisImageModelLoader {
 
     protected String imagesPath = "";
     protected static Long idCount = 0l;
@@ -27,20 +27,21 @@ public class ImageModelLoader {
     protected HashMap<String, String> annotations = new HashMap<String, String>();
     protected Logger logger;
 
-    public ImageModelLoader() {
-        logger = LoggerFactory.getLogger(ImageModelLoader.class);
+    public CmisImageModelLoader() {
+        logger = LoggerFactory.getLogger(CmisImageModelLoader.class);
     }
 
-    public ImageModelLoader(String imagesPath) {
+    public CmisImageModelLoader(String imagesPath) {
         this();
         this.imagesPath = imagesPath;
     }
 
-    public ImageModel loadImage(File image) {
+    public CmisImageModel loadImage(File image) {
 
         //for now only sets the filename
-        ImageModel im = new ImageModel(image.getAbsolutePath(), "", null);
-        im.setId(idCount++);
+        CmisImageModel im = new CmisImageModel(image.getAbsolutePath(), "", null);
+        im.setId(idCount.toString());
+        idCount++;
 
         //get the description
         String name = image.getParentFile().getName() + "/" + image.getName();

@@ -54,9 +54,6 @@ import java.io.*;
 import java.util.*;
 import java.util.Map.Entry;
 import javax.imageio.ImageIO;
-import javax.persistence.EntityManager;
-import javax.persistence.EntityManagerFactory;
-import javax.persistence.Persistence;
 
 import pt.inevo.encontra.descriptors.CompositeDescriptor;
 import pt.inevo.encontra.engine.SimpleIndexedObjectFactory;
@@ -69,38 +66,34 @@ import pt.inevo.encontra.nbtree.index.BTreeIndex;
 import pt.inevo.encontra.query.CriteriaQuery;
 import pt.inevo.encontra.query.Path;
 import pt.inevo.encontra.query.criteria.CriteriaBuilderImpl;
-import pt.inevo.encontra.storage.IEntity;
+import pt.inevo.encontra.storage.CMISObjectStorage;
+import pt.inevo.encontra.storage.CmisObject;
 import pt.inevo.encontra.storage.IEntry;
-import pt.inevo.encontra.storage.JPAObjectStorage;
-import pt.inevo.encontra.webapp.loader.ImageLoaderActor;
-import pt.inevo.encontra.webapp.loader.ImageModel;
-import pt.inevo.encontra.webapp.loader.ImageModelLoader;
+import pt.inevo.encontra.webapp.loader.CmisImageLoaderActor;
+import pt.inevo.encontra.webapp.loader.CmisImageModel;
+import pt.inevo.encontra.webapp.loader.CmisImageModelLoader;
 import pt.inevo.encontra.webapp.loader.Message;
 import scala.Option;
 
 public class EnContRAApplication extends Application {
 
-    public class ImageStorage extends JPAObjectStorage<Long, ImageModel> {
+    public class CmisImageStorage extends CMISObjectStorage<CmisImageModel> {
 
-        EntityManagerFactory emf = Persistence.createEntityManagerFactory("manager");
-        EntityManager em = emf.createEntityManager(); // Retrieve an application managed entity manager
-
-        public ImageStorage() {
-            super();
-            setEntityManager(em);
+        CmisImageStorage(Map<String, String> parameters) {
+            super(parameters);
         }
     }
 
-    public class WebAppEngine <O extends IEntity> extends AbstractSearcher<O> {
+    public class WebAppEngine <O extends CmisObject> extends AbstractSearcher<O> {
 
         @Override
         protected Result<O> getResultObject(Result<IEntry> entryresult) {
-            Object result = storage.get(Long.parseLong(entryresult.getResultObject().getId().toString()));
+            Object result = storage.get(entryresult.getResultObject().getId().toString());
             return new Result<O>((O) result);
         }
     }
 
-    private WebAppEngine<ImageModel> e = new WebAppEngine<ImageModel>();
+    private WebAppEngine<CmisImageModel> e = new WebAppEngine<CmisImageModel>();
     private String[] descriptors = new String[]{"CEDD", "ColorLayout", "Dominant Color",
             "EdgeHistogram", "FCTH", "Scalable Color"};
     private Window main = new Window("EnContRA");
@@ -111,10 +104,10 @@ public class EnContRAApplication extends Application {
     private TextField keywords;
     private com.vaadin.ui.Label logViewer = new com.vaadin.ui.Label();
     private HashMap<CheckBox, Slider> descriptorsUI = new HashMap<CheckBox, Slider>();
-    private HashMap<ImageStrip.Image, ImageModel> resultImages = new HashMap<ImageStrip.Image, ImageModel>();
+    private HashMap<ImageStrip.Image, CmisImageModel> resultImages = new HashMap<ImageStrip.Image, CmisImageModel>();
     final Map<String, String> databases = new HashMap<String, String>();
     private static Properties props = new Properties();
-    private ImageStorage storage;
+    private CmisImageStorage storage;
 
     @Override
     public void init() {
@@ -347,7 +340,7 @@ public class EnContRAApplication extends Application {
                 resultHolder.removeAllComponents();
 
                 //get all the results
-                ResultSet<ImageModel> results = knnQuery(file);
+                ResultSet<CmisImageModel> results = knnQuery(file);
 
                 ImageStrip strip = setupImageStrip();
                 resultHolder.addComponent(strip);
@@ -356,7 +349,7 @@ public class EnContRAApplication extends Application {
                     @Override
                     public void valueChange(ValueChangeEvent event) {
                         final ImageStrip.Image img = (ImageStrip.Image) event.getProperty().getValue();
-                        ImageModel selectedModel = resultImages.get(img);
+                        CmisImageModel selectedModel = resultImages.get(img);
 
                         Embedded e = new Embedded("", new FileResource(new File(selectedModel.getFilename()), EnContRAApplication.this));
                         e.setHeight("250");
@@ -408,7 +401,7 @@ public class EnContRAApplication extends Application {
                 });
 
                 resultImages.clear();
-                for (Result<ImageModel> r : results) {
+                for (Result<CmisImageModel> r : results) {
                     ImageStrip.Image img = strip.addImage(new FileResource(new File(r.getResultObject().getFilename()), EnContRAApplication.this));
                     //to keep track of which image was selected and display it later
                     resultImages.put(img, r.getResultObject());
@@ -446,7 +439,7 @@ public class EnContRAApplication extends Application {
         Properties p = new Properties();
 
         System.out.println("Configuring the Retrieval Engine...");
-        storage = new ImageStorage();
+        storage = new CmisImageStorage(loadCmisConfig());
         e.setObjectStorage(storage);
         e.setQueryProcessor(new QueryProcessorDefaultParallelImpl());
         e.getQueryProcessor().setIndexedObjectFactory(new SimpleIndexedObjectFactory());
@@ -568,16 +561,32 @@ public class EnContRAApplication extends Application {
         setupEngine(false);
     }
 
+    private Map<String, String> loadCmisConfig() {
+        Properties properties = new Properties();
+        Map<String, String> parameter = new HashMap<String, String>();
+        try {
+            properties.load(this.getClass().getClassLoader().getResourceAsStream(CommonInfo.CMIS_CONFIG_FILE));
+            Enumeration e = properties.propertyNames();
+            while (e.hasMoreElements()) {
+                String propertyName = e.nextElement().toString();
+                parameter.put(propertyName, properties.getProperty(propertyName));
+            }
+        } catch (IOException e1) {
+            e1.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+        }
+        return parameter;
+    }
+
     //load the image database
     private void load(String databaseFolder) {
         System.out.println("Loading some objects to the test indexes...");
-        ImageModelLoader loader = new ImageModelLoader(databaseFolder);
+        CmisImageModelLoader loader = new CmisImageModelLoader(databaseFolder);
         loader.scan();
 
         ActorRef loaderActor = UntypedActor.actorOf(new UntypedActorFactory() {
             @Override
             public UntypedActor create() {
-                return new ImageLoaderActor(e);
+                return new CmisImageLoaderActor(e);
             }
         }).start();
 
@@ -617,16 +626,16 @@ public class EnContRAApplication extends Application {
     }
 
     //creates and performs a knn query to the engine
-    private ResultSet<ImageModel> knnQuery(File file) throws IOException {
+    private ResultSet<CmisImageModel> knnQuery(File file) throws IOException {
         System.out.println("Creating a knn query...");
         BufferedImage image = ImageIO.read(file);
 
         //Creating a combined query for the results
         CriteriaBuilderImpl cb = new CriteriaBuilderImpl();
-        CriteriaQuery<ImageModel> criteriaQuery = cb.createQuery(ImageModel.class);
+        CriteriaQuery<CmisImageModel> criteriaQuery = cb.createQuery(CmisImageModel.class);
 
         //Create the Model/Attributes Path
-        Path<ImageModel> model = criteriaQuery.from(ImageModel.class);
+        Path<CmisImageModel> model = criteriaQuery.from(CmisImageModel.class);
         Path imageModel = model.get("image");
 
         String storageQuery = "";
@@ -634,7 +643,7 @@ public class EnContRAApplication extends Application {
         if (!keywordsStr.equals("")) {
             String [] keywordsSplit = keywordsStr.split(",");
             for (int i = 0; i < keywordsSplit.length ; i++) {
-                storageQuery += "category like '%" + keywordsSplit[i].toLowerCase() + "%' ";
+                storageQuery += "cmis:contentStreamFileName like '%" + keywordsSplit[i].toLowerCase() + "%' ";
                 if (i+1 < keywordsSplit.length)
                     storageQuery += "and ";
             }
@@ -642,7 +651,7 @@ public class EnContRAApplication extends Application {
 
         CriteriaQuery query = cb.createQuery().where(
                 cb.similar(imageModel, image)).distinct(true).limit(10);
-        ResultSet<ImageModel> results = null;
+        ResultSet<CmisImageModel> results = null;
         if (!keywordsStr.equals("")) {
             query.setCriteria(new StorageCriteria(storageQuery));
         }
@@ -654,9 +663,9 @@ public class EnContRAApplication extends Application {
     }
 
     //print the results
-    private void printResults(ResultSet<ImageModel> set){
+    private void printResults(ResultSet<CmisImageModel> set){
         System.out.println("Results:");
-        for (Result<ImageModel> r: set){
+        for (Result<CmisImageModel> r: set){
             System.out.println(r);
         }
     }

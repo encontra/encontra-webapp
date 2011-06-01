@@ -4,30 +4,28 @@ import akka.actor.ActorRef;
 import akka.actor.UntypedActor;
 import akka.actor.UntypedActorFactory;
 import akka.dispatch.CompletableFuture;
-import pt.inevo.encontra.common.Result;
 import pt.inevo.encontra.index.search.Searcher;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.List;
 
-public class ImageLoaderActor extends UntypedActor {
+public class CmisImageLoaderActor extends UntypedActor {
 
-    protected ImageModelLoader loader;
+    protected CmisImageModelLoader loader;
     protected ArrayList<ActorRef> producers;
     protected CompletableFuture future;
     protected Searcher e;
 
-    public ImageLoaderActor() {
+    public CmisImageLoaderActor() {
         producers = new ArrayList<ActorRef>();
     }
 
-    public ImageLoaderActor(Searcher searcher) {
+    public CmisImageLoaderActor(Searcher searcher) {
         this();
         this.e = searcher;
     }
 
-    public ImageLoaderActor(ImageModelLoader loader) {
+    public CmisImageLoaderActor(CmisImageModelLoader loader) {
         this();
         this.loader = loader;
     }
@@ -37,14 +35,14 @@ public class ImageLoaderActor extends UntypedActor {
         if (o instanceof Message) {
             Message message = (Message) o;
             if (message.operation.equals("PROCESSALL")) {
-                loader = (ImageModelLoader) message.obj;
+                loader = (CmisImageModelLoader) message.obj;
 
                 for (int i = 0; i < 10; i++) {
                     ActorRef actor = UntypedActor.actorOf(new UntypedActorFactory() {
 
                         @Override
                         public UntypedActor create() {
-                            return new ImageLoaderActor(loader);
+                            return new CmisImageLoaderActor(loader);
                         }
                     }).start();
                     producers.add(actor);
@@ -65,14 +63,14 @@ public class ImageLoaderActor extends UntypedActor {
 
             } else if (message.operation.equals("PROCESSONE")) {
                 File f = (File) message.obj;
-                ImageModel model = loader.loadImage(f);
+                CmisImageModel model = loader.loadImage(f);
 
                 Message answer = new Message();
                 answer.operation = "ANSWER";
                 answer.obj = model;
                 getContext().replySafe(answer);
             } else if (message.operation.equals("ANSWER")) {
-                ImageModel model = (ImageModel) message.obj;
+                CmisImageModel model = (CmisImageModel) message.obj;
                 if (model != null) {    //save the object
                     e.insert(model);
                     model.getImage().flush();
