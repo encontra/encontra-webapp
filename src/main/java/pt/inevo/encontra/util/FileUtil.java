@@ -5,9 +5,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Object that can find all the files in a directory with a given extension.
- * @author Ricardo
- */
+* Object that can find all the files in a directory with a given extension.
+* @author Ricardo
+*/
 public class FileUtil {
 
     /**

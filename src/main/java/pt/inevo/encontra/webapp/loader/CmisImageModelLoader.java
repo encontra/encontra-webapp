@@ -15,9 +15,9 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Loader for Objects of the type: ImageModel.
- * @author Ricardo
- */
+* Loader for Objects of the type: ImageModel.
+* @author Ricardo
+*/
 public class CmisImageModelLoader {
 
     protected String imagesPath = "";

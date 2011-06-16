@@ -25,60 +25,68 @@ import com.vaadin.addon.colorpicker.events.ColorChangeEvent;
 import com.vaadin.data.Property;
 import com.vaadin.data.Property.ValueChangeEvent;
 import com.vaadin.terminal.FileResource;
-import com.vaadin.ui.*;
 import com.vaadin.ui.AbstractSelect.Filtering;
+import com.vaadin.ui.*;
 import com.vaadin.ui.Button;
 import com.vaadin.ui.Button.ClickEvent;
-import com.vaadin.ui.Label;
 import com.vaadin.ui.TextField;
 import com.vaadin.ui.Window;
 import com.vaadin.ui.Window.Notification;
 import org.vaadin.peter.imagestrip.ImageStrip;
 import pt.inevo.encontra.common.DefaultResultProvider;
+import pt.inevo.encontra.common.Result;
+import pt.inevo.encontra.common.ResultSet;
 import pt.inevo.encontra.convert.SVGConverter;
+import pt.inevo.encontra.descriptors.CompositeDescriptor;
 import pt.inevo.encontra.descriptors.CompositeDescriptorExtractor;
-import pt.inevo.encontra.geometry.PolygonSet;
+import pt.inevo.encontra.engine.SimpleIndexedObjectFactory;
 import pt.inevo.encontra.geometry.Polygon;
+import pt.inevo.encontra.geometry.PolygonSet;
 import pt.inevo.encontra.image.descriptors.*;
+import pt.inevo.encontra.index.SimpleIndex;
 import pt.inevo.encontra.index.search.AbstractSearcher;
 import pt.inevo.encontra.index.search.ParallelSimpleSearcher;
+import pt.inevo.encontra.lucene.index.LuceneIndex;
+import pt.inevo.encontra.nbtree.index.BTreeIndex;
 import pt.inevo.encontra.nbtree.index.ParallelNBTreeSearcher;
+import pt.inevo.encontra.query.CriteriaQuery;
+import pt.inevo.encontra.query.Path;
+import pt.inevo.encontra.query.QueryProcessorDefaultImpl;
 import pt.inevo.encontra.query.QueryProcessorDefaultParallelImpl;
+import pt.inevo.encontra.query.criteria.CriteriaBuilderImpl;
 import pt.inevo.encontra.query.criteria.StorageCriteria;
 import pt.inevo.encontra.service.PolygonDetectionService;
 import pt.inevo.encontra.service.impl.PolygonDetectionServiceImpl;
+import pt.inevo.encontra.storage.CMISObjectStorage;
+import pt.inevo.encontra.storage.CmisObject;
+import pt.inevo.encontra.storage.IEntry;
+import pt.inevo.encontra.webapp.loader.CmisImageLoaderActor;
+import pt.inevo.encontra.webapp.loader.CmisImageModelLoader;
+import pt.inevo.encontra.webapp.loader.CmisIndexedObject;
+import pt.inevo.encontra.webapp.loader.Message;
+import scala.Option;
 
+import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.util.*;
 import java.util.Map.Entry;
-import javax.imageio.ImageIO;
 
-import pt.inevo.encontra.descriptors.CompositeDescriptor;
-import pt.inevo.encontra.engine.SimpleIndexedObjectFactory;
-import pt.inevo.encontra.index.IndexedObject;
-import pt.inevo.encontra.common.Result;
-import pt.inevo.encontra.common.ResultSet;
-import pt.inevo.encontra.index.SimpleIndex;
-import pt.inevo.encontra.lucene.index.LuceneIndex;
-import pt.inevo.encontra.nbtree.index.BTreeIndex;
-import pt.inevo.encontra.query.CriteriaQuery;
-import pt.inevo.encontra.query.Path;
-import pt.inevo.encontra.query.criteria.CriteriaBuilderImpl;
-import pt.inevo.encontra.storage.CMISObjectStorage;
-import pt.inevo.encontra.storage.CmisObject;
-import pt.inevo.encontra.storage.IEntry;
-import pt.inevo.encontra.webapp.loader.CmisImageLoaderActor;
-import pt.inevo.encontra.webapp.loader.CmisImageModel;
-import pt.inevo.encontra.webapp.loader.CmisImageModelLoader;
-import pt.inevo.encontra.webapp.loader.Message;
-import scala.Option;
+//import pt.inevo.encontra.webapp.loader.CmisImageLoaderActor;
+//import pt.inevo.encontra.webapp.loader.CmisImageModelLoader;
+//import pt.inevo.encontra.webapp.loader.Message;
 
 public class EnContRAApplication extends Application {
 
-    public class CmisImageStorage extends CMISObjectStorage<CmisImageModel> {
+    /**
+     * CmisImageStorage Apdater.
+     */
+    public class CmisImageStorage extends CMISObjectStorage<CmisIndexedObject> {
 
+        /**
+         * @param parameters a map with the cmis storage configuration parameters
+         */
         CmisImageStorage(Map<String, String> parameters) {
             super(parameters);
         }
@@ -88,14 +96,12 @@ public class EnContRAApplication extends Application {
 
         @Override
         protected Result<O> getResultObject(Result<IEntry> entryresult) {
-            Object result = storage.get(entryresult.getResultObject().getId().toString());
+            Object result = storage.get(entryresult.getResultObject().getId());
             return new Result<O>((O) result);
         }
     }
 
-    private WebAppEngine<CmisImageModel> e = new WebAppEngine<CmisImageModel>();
-    private String[] descriptors = new String[]{"CEDD", "ColorLayout", "Dominant Color",
-            "EdgeHistogram", "FCTH", "Scalable Color"};
+    private AbstractSearcher<CmisIndexedObject> e = new WebAppEngine<CmisIndexedObject> ();
     private Window main = new Window("EnContRA");
     private SplitPanel horiz = new SplitPanel();
     private ImageUploader uploader;
@@ -104,7 +110,7 @@ public class EnContRAApplication extends Application {
     private TextField keywords;
     private com.vaadin.ui.Label logViewer = new com.vaadin.ui.Label();
     private HashMap<CheckBox, Slider> descriptorsUI = new HashMap<CheckBox, Slider>();
-    private HashMap<ImageStrip.Image, CmisImageModel> resultImages = new HashMap<ImageStrip.Image, CmisImageModel>();
+    private HashMap<ImageStrip.Image, CmisIndexedObject> resultImages = new HashMap<ImageStrip.Image, CmisIndexedObject>();
     final Map<String, String> databases = new HashMap<String, String>();
     private static Properties props = new Properties();
     private CmisImageStorage storage;
@@ -198,7 +204,7 @@ public class EnContRAApplication extends Application {
 
         configLayout.addComponent(new com.vaadin.ui.Label("Choose the descriptors to be used:"));
 
-        for (String feat : descriptors) {
+        for (String feat : CommonInfo.DESCRIPTORS) {
             HorizontalLayout hl = new HorizontalLayout();
             hl.setSpacing(true);
             CheckBox cb = new CheckBox(feat);
@@ -269,7 +275,6 @@ public class EnContRAApplication extends Application {
         configPanel.addComponent(vr);
 
         // Add a horizontal SplitPanel to the lower area
-
         horiz.setOrientation(SplitPanel.ORIENTATION_HORIZONTAL);
         horiz.setSplitPosition(50); // percent
         horiz.setHeight(450, VerticalLayout.UNITS_PIXELS);
@@ -304,6 +309,7 @@ public class EnContRAApplication extends Application {
         resultHolder.setWidth(100, ImageStrip.UNITS_PERCENTAGE);
         root.addComponent(resultHolder);
 
+        //search button listener
         searchButton.addListener(new Button.ClickListener() {
 
             public void buttonClick(Button.ClickEvent clickEvent) {
@@ -314,7 +320,6 @@ public class EnContRAApplication extends Application {
                     try { //query by sketch
                         file = File.createTempFile("encontra", ".jpg");
                         new SVGConverter().convertToMimeType("image/jpeg", new ByteArrayInputStream(svg.getBytes()), new FileOutputStream(file));
-
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -340,7 +345,7 @@ public class EnContRAApplication extends Application {
                 resultHolder.removeAllComponents();
 
                 //get all the results
-                ResultSet<CmisImageModel> results = knnQuery(file);
+                ResultSet<CmisIndexedObject> results = knnQuery(file);
 
                 ImageStrip strip = setupImageStrip();
                 resultHolder.addComponent(strip);
@@ -349,10 +354,10 @@ public class EnContRAApplication extends Application {
                     @Override
                     public void valueChange(ValueChangeEvent event) {
                         final ImageStrip.Image img = (ImageStrip.Image) event.getProperty().getValue();
-                        CmisImageModel selectedModel = resultImages.get(img);
+                        CmisIndexedObject selectedModel = resultImages.get(img);
 
-                        Embedded e = new Embedded("", new FileResource(new File(selectedModel.getFilename()), EnContRAApplication.this));
-                        e.setHeight("250");
+//                        Embedded e = new Embedded("", new FileResource(new File(selectedModel.getFilename()), EnContRAApplication.this));
+//                        e.setHeight("250");
                         VerticalLayout v = new VerticalLayout();
                         v.setMargin(new Layout.MarginInfo(true, true, true, true));
                         v.setSpacing(true);
@@ -361,37 +366,37 @@ public class EnContRAApplication extends Application {
 
                             @Override
                             public void buttonClick(ClickEvent event) {
-                                try {
-                                    String filename = resultImages.get(img).getFilename();
-                                    File f = new File(filename);
-                                    uploader.setFile(f);
-                                    queryByExample(f);
-                                    resetQBEHorizPanel();
-
-                                } catch (IOException ex) {
-                                    ex.printStackTrace();
-                                    main.showNotification("There was an error when performing the query, please re-try!",
-                                            Notification.TYPE_ERROR_MESSAGE);
-                                }
+//                                try {
+//                                    String filename = resultImages.get(img).getFilename();
+//                                    File f = new File(filename);
+//                                    uploader.setFile(f);
+//                                    queryByExample(f);
+//                                    resetQBEHorizPanel();
+//
+//                                } catch (IOException ex) {
+//                                    ex.printStackTrace();
+//                                    main.showNotification("There was an error when performing the query, please re-try!",
+//                                            Notification.TYPE_ERROR_MESSAGE);
+//                                }
                             }
                         });
                         v.addComponent(findSimilar);
-                        v.addComponent(e);
+//                        v.addComponent(e);
 
-                        HorizontalLayout fileNameLayout = new HorizontalLayout();
-                        Label filenameLabel = new Label();
-                        filenameLabel.setCaption("Filename: ");
-                        filenameLabel.setValue(selectedModel.getFilename());
-                        fileNameLayout.addComponent(filenameLabel);
+//                        HorizontalLayout fileNameLayout = new HorizontalLayout();
+//                        Label filenameLabel = new Label();
+//                        filenameLabel.setCaption("Filename: ");
+//                        filenameLabel.setValue(selectedModel.getFilename());
+//                        fileNameLayout.addComponent(filenameLabel);
 
-                        HorizontalLayout categoryLayout = new HorizontalLayout();
-                        Label categoryLabel = new Label();
-                        categoryLabel.setCaption("Category: ");
-                        categoryLabel.setValue(selectedModel.getCategory());
-                        categoryLayout.addComponent(categoryLabel);
+//                        HorizontalLayout categoryLayout = new HorizontalLayout();
+//                        Label categoryLabel = new Label();
+//                        categoryLabel.setCaption("Category: ");
+//                        categoryLabel.setValue(selectedModel.getCategory());
+//                        categoryLayout.addComponent(categoryLabel);
 
-                        v.addComponent(fileNameLayout);
-                        v.addComponent(categoryLayout);
+//                        v.addComponent(fileNameLayout);
+//                        v.addComponent(categoryLayout);
 
                         if (horiz.getSecondComponent() != null){
                             horiz.removeComponent(horiz.getSecondComponent());
@@ -401,8 +406,15 @@ public class EnContRAApplication extends Application {
                 });
 
                 resultImages.clear();
-                for (Result<CmisImageModel> r : results) {
-                    ImageStrip.Image img = strip.addImage(new FileResource(new File(r.getResultObject().getFilename()), EnContRAApplication.this));
+                for (Result<CmisIndexedObject> r : results) {
+
+                   System.out.println("Result Id:" + r.getResultObject().getId());
+
+                   File tmpFile= File.createTempFile(r.getResultObject().getId(), ".jpg");
+                   ImageIO.write(r.getResultObject().getValue(), "jpg", tmpFile);
+
+                   ImageStrip.Image img = strip.addImage(new FileResource(tmpFile, EnContRAApplication.this));
+
                     //to keep track of which image was selected and display it later
                     resultImages.put(img, r.getResultObject());
                 }
@@ -441,7 +453,7 @@ public class EnContRAApplication extends Application {
         System.out.println("Configuring the Retrieval Engine...");
         storage = new CmisImageStorage(loadCmisConfig());
         e.setObjectStorage(storage);
-        e.setQueryProcessor(new QueryProcessorDefaultParallelImpl());
+        e.setQueryProcessor(new QueryProcessorDefaultImpl());
         e.getQueryProcessor().setIndexedObjectFactory(new SimpleIndexedObjectFactory());
         e.getQueryProcessor().setTopSearcher(e);
         e.setResultProvider(new DefaultResultProvider());
@@ -455,26 +467,26 @@ public class EnContRAApplication extends Application {
         imageSearcher.setResultProvider(new DefaultResultProvider());
 
         //getting the descriptors
-        CompositeDescriptorExtractor compositeImageDescriptorExtractor = new CompositeDescriptorExtractor(IndexedObject.class, null);
+        CompositeDescriptorExtractor compositeImageDescriptorExtractor = new CompositeDescriptorExtractor(CmisIndexedObject.class, null);
 
         String descriptors = "";
         Set<Entry<CheckBox, Slider>> features = descriptorsUI.entrySet();
         for (Entry<CheckBox, Slider> pair : features) {
             if (pair.getKey().getCaption().contains("CEDD") && pair.getKey().booleanValue()) {
                 descriptors += "CEDD,";
-                compositeImageDescriptorExtractor.addExtractor(new CEDDDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                compositeImageDescriptorExtractor.addExtractor(new CEDDDescriptor<CmisIndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
             } else if (pair.getKey().getCaption().contains("ColorLayout") && pair.getKey().booleanValue()) {
                 descriptors += "ColorLayout,";
-                compositeImageDescriptorExtractor.addExtractor(new ColorLayoutDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                compositeImageDescriptorExtractor.addExtractor(new ColorLayoutDescriptor<CmisIndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
             } else if (pair.getKey().getCaption().contains("Dominant Color") && pair.getKey().booleanValue()) {
                 descriptors += "Dominant Color,";
-                compositeImageDescriptorExtractor.addExtractor(new DominantColorDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                compositeImageDescriptorExtractor.addExtractor(new DominantColorDescriptor<CmisIndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
             } else if (pair.getKey().getCaption().contains("EdgeHistogram") && pair.getKey().booleanValue()) {
                 descriptors += "EdgeHistogram,";
-                compositeImageDescriptorExtractor.addExtractor(new EdgeHistogramDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                compositeImageDescriptorExtractor.addExtractor(new EdgeHistogramDescriptor<CmisIndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
             } else if (pair.getKey().getCaption().contains("FCTH") && pair.getKey().booleanValue()) {
                 descriptors += "FCTH,";
-                compositeImageDescriptorExtractor.addExtractor(new FCTHDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                compositeImageDescriptorExtractor.addExtractor(new FCTHDescriptor<CmisIndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
             } else if (pair.getKey().getCaption().contains("Scalable Color") && pair.getKey().booleanValue()) {
                 descriptors += "Scalable Color,";
                 compositeImageDescriptorExtractor.addExtractor(new ScalableColorDescriptor(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
@@ -484,13 +496,14 @@ public class EnContRAApplication extends Application {
         descriptors = descriptors.substring(0, descriptors.length()-1);
 
         p.put(CommonInfo.CONFIG_FILE_DESCRIPTORS_PROPERTY, descriptors);
+        p.put(CommonInfo.CONFIG_FILE_INDEX_PATH_PROPERTY, CommonInfo.CONFIG_FILE_INDEX_PATH);
 
         imageSearcher.setDescriptorExtractor(compositeImageDescriptorExtractor);
 
         String index = "";
         if (indexSelector.getValue().equals("Btree Index")) { //using a BTreeIndex
             index = "Btree Index";
-            imageSearcher.setIndex(new BTreeIndex("webappBTree", CompositeDescriptor.class));
+            imageSearcher.setIndex(new BTreeIndex(CommonInfo.CONFIG_FILE_INDEX_PATH, "webappBTree", CompositeDescriptor.class));
         } else if (indexSelector.getValue().equals("Lucene Index")) { //using a LuceneIndex
             index = "Lucene Index";
             imageSearcher.setIndex(new LuceneIndex("LuceneIndex", CompositeDescriptor.class));
@@ -541,6 +554,7 @@ public class EnContRAApplication extends Application {
         }
 
         String index = p.getProperty(CommonInfo.CONFIG_FILE_INDEX_PROPERTY);
+        CommonInfo.CONFIG_FILE_INDEX_PATH = p.getProperty(CommonInfo.CONFIG_FILE_INDEX_PATH_PROPERTY);
         String [] descriptors = p.getProperty(CommonInfo.CONFIG_FILE_DESCRIPTORS_PROPERTY).split(",");
         String database = p.getProperty(CommonInfo.CONFIG_FILE_DATABASE_PROPERTY);
 
@@ -561,6 +575,10 @@ public class EnContRAApplication extends Application {
         setupEngine(false);
     }
 
+    /**
+     * Loads the CMIS configuration file.
+     * @return
+     */
     private Map<String, String> loadCmisConfig() {
         Properties properties = new Properties();
         Map<String, String> parameter = new HashMap<String, String>();
@@ -626,16 +644,16 @@ public class EnContRAApplication extends Application {
     }
 
     //creates and performs a knn query to the engine
-    private ResultSet<CmisImageModel> knnQuery(File file) throws IOException {
+    private ResultSet<CmisIndexedObject> knnQuery(File file) throws IOException {
         System.out.println("Creating a knn query...");
         BufferedImage image = ImageIO.read(file);
 
         //Creating a combined query for the results
         CriteriaBuilderImpl cb = new CriteriaBuilderImpl();
-        CriteriaQuery<CmisImageModel> criteriaQuery = cb.createQuery(CmisImageModel.class);
+        CriteriaQuery<CmisIndexedObject> criteriaQuery = cb.createQuery(CmisIndexedObject.class);
 
         //Create the Model/Attributes Path
-        Path<CmisImageModel> model = criteriaQuery.from(CmisImageModel.class);
+        Path<CmisIndexedObject> model = criteriaQuery.from(CmisIndexedObject.class);
         Path imageModel = model.get("image");
 
         String storageQuery = "";
@@ -651,22 +669,13 @@ public class EnContRAApplication extends Application {
 
         CriteriaQuery query = cb.createQuery().where(
                 cb.similar(imageModel, image)).distinct(true).limit(10);
-        ResultSet<CmisImageModel> results = null;
+        ResultSet<CmisIndexedObject> results = null;
         if (!keywordsStr.equals("")) {
             query.setCriteria(new StorageCriteria(storageQuery));
         }
 
         results = e.search(query);
-        printResults(results);
         System.out.println("...done! Query returned: " + results.getSize() + " results.");
         return results;
-    }
-
-    //print the results
-    private void printResults(ResultSet<CmisImageModel> set){
-        System.out.println("Results:");
-        for (Result<CmisImageModel> r: set){
-            System.out.println(r);
-        }
     }
 }
