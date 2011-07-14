@@ -39,10 +39,14 @@ import pt.inevo.encontra.common.ResultSet;
 import pt.inevo.encontra.convert.SVGConverter;
 import pt.inevo.encontra.descriptors.CompositeDescriptor;
 import pt.inevo.encontra.descriptors.CompositeDescriptorExtractor;
+import pt.inevo.encontra.drawing.Drawing;
+import pt.inevo.encontra.drawing.DrawingFactory;
+import pt.inevo.encontra.drawing.descriptors.TopogeoDescriptorExtractor;
 import pt.inevo.encontra.engine.SimpleIndexedObjectFactory;
 import pt.inevo.encontra.geometry.Polygon;
 import pt.inevo.encontra.geometry.PolygonSet;
 import pt.inevo.encontra.image.descriptors.*;
+import pt.inevo.encontra.index.IndexedObject;
 import pt.inevo.encontra.index.SimpleIndex;
 import pt.inevo.encontra.index.search.AbstractSearcher;
 import pt.inevo.encontra.index.search.ParallelSimpleSearcher;
@@ -57,42 +61,41 @@ import pt.inevo.encontra.query.criteria.CriteriaBuilderImpl;
 import pt.inevo.encontra.query.criteria.StorageCriteria;
 import pt.inevo.encontra.service.PolygonDetectionService;
 import pt.inevo.encontra.service.impl.PolygonDetectionServiceImpl;
-import pt.inevo.encontra.storage.CMISObjectStorage;
-import pt.inevo.encontra.storage.CmisObject;
+import pt.inevo.encontra.storage.IEntity;
 import pt.inevo.encontra.storage.IEntry;
-import pt.inevo.encontra.webapp.loader.CmisImageLoaderActor;
-import pt.inevo.encontra.webapp.loader.CmisImageModelLoader;
-import pt.inevo.encontra.webapp.loader.CmisIndexedObject;
-import pt.inevo.encontra.webapp.loader.Message;
+import pt.inevo.encontra.storage.JPAObjectStorage;
+import pt.inevo.encontra.webapp.loader.*;
 import scala.Option;
 
-import javax.imageio.ImageIO;
+import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.Persistence;
 import java.awt.*;
-import java.awt.image.BufferedImage;
 import java.io.*;
 import java.util.*;
 import java.util.Map.Entry;
 
-//import pt.inevo.encontra.webapp.loader.CmisImageLoaderActor;
-//import pt.inevo.encontra.webapp.loader.CmisImageModelLoader;
-//import pt.inevo.encontra.webapp.loader.Message;
-
 public class EnContRAApplication extends Application {
 
     /**
-     * CmisImageStorage Apdater.
+     * Fake DrawingStorage - It actually saves DrawingModel and uses JPA storage instead of CMIS.
      */
-    public class CmisImageStorage extends CMISObjectStorage<CmisIndexedObject> {
+    public class DrawingStorage extends JPAObjectStorage<String, DrawingModel> {
 
-        /**
-         * @param parameters a map with the cmis storage configuration parameters
-         */
-        CmisImageStorage(Map<String, String> parameters) {
-            super(parameters);
+        EntityManagerFactory emf;
+        EntityManager em;
+
+        DrawingStorage() {
+            super();
+
+            emf = Persistence.createEntityManagerFactory("manager");
+            em = emf.createEntityManager(); // Retrieve an application managed entity manager
+            this.setEntityManager(em);
+
         }
     }
 
-    public class WebAppEngine <O extends CmisObject> extends AbstractSearcher<O> {
+    public class WebAppEngine <O extends IEntity> extends AbstractSearcher<O> {
 
         @Override
         protected Result<O> getResultObject(Result<IEntry> entryresult) {
@@ -101,7 +104,7 @@ public class EnContRAApplication extends Application {
         }
     }
 
-    private AbstractSearcher<CmisIndexedObject> e = new WebAppEngine<CmisIndexedObject> ();
+    private AbstractSearcher<DrawingModel> e = new WebAppEngine<DrawingModel> ();
     private Window main = new Window("EnContRA");
     private SplitPanel horiz = new SplitPanel();
     private ImageUploader uploader;
@@ -110,10 +113,10 @@ public class EnContRAApplication extends Application {
     private TextField keywords;
     private com.vaadin.ui.Label logViewer = new com.vaadin.ui.Label();
     private HashMap<CheckBox, Slider> descriptorsUI = new HashMap<CheckBox, Slider>();
-    private HashMap<ImageStrip.Image, CmisIndexedObject> resultImages = new HashMap<ImageStrip.Image, CmisIndexedObject>();
+    private HashMap<ImageStrip.Image, DrawingModel> resultImages = new HashMap<ImageStrip.Image, DrawingModel>();
     final Map<String, String> databases = new HashMap<String, String>();
     private static Properties props = new Properties();
-    private CmisImageStorage storage;
+    private DrawingStorage storage;
 
     @Override
     public void init() {
@@ -215,7 +218,7 @@ public class EnContRAApplication extends Application {
 
                 public void buttonClick(ClickEvent event) {
                     boolean enabled = event.getButton().booleanValue();
-                    Slider s = descriptorsUI.get((CheckBox) event.getButton());
+                    Slider s = descriptorsUI.get(event.getButton());
                     s.setEnabled(enabled);
                 }
             });
@@ -345,7 +348,7 @@ public class EnContRAApplication extends Application {
                 resultHolder.removeAllComponents();
 
                 //get all the results
-                ResultSet<CmisIndexedObject> results = knnQuery(file);
+                ResultSet<DrawingModel> results = knnQuery(file);
 
                 ImageStrip strip = setupImageStrip();
                 resultHolder.addComponent(strip);
@@ -354,7 +357,7 @@ public class EnContRAApplication extends Application {
                     @Override
                     public void valueChange(ValueChangeEvent event) {
                         final ImageStrip.Image img = (ImageStrip.Image) event.getProperty().getValue();
-                        CmisIndexedObject selectedModel = resultImages.get(img);
+                        DrawingModel selectedModel = resultImages.get(img);
 
 //                        Embedded e = new Embedded("", new FileResource(new File(selectedModel.getFilename()), EnContRAApplication.this));
 //                        e.setHeight("250");
@@ -406,12 +409,15 @@ public class EnContRAApplication extends Application {
                 });
 
                 resultImages.clear();
-                for (Result<CmisIndexedObject> r : results) {
+                for (Result<DrawingModel> r : results) {
 
                    System.out.println("Result Id:" + r.getResultObject().getId());
 
-                   File tmpFile= File.createTempFile(r.getResultObject().getId(), ".jpg");
-                   ImageIO.write(r.getResultObject().getValue(), "jpg", tmpFile);
+                   File tmpFile= File.createTempFile("tempFile" + r.getResultObject().getId(), ".png");
+                    String filename = tmpFile.getAbsolutePath();
+                    filename = filename.substring(0, filename.length()-4);
+                   r.getResultObject().getDrawing().export(filename);
+//                   ImageIO.write(r.getResultObject().getValue(), "jpg", tmpFile);
 
                    ImageStrip.Image img = strip.addImage(new FileResource(tmpFile, EnContRAApplication.this));
 
@@ -451,7 +457,8 @@ public class EnContRAApplication extends Application {
         Properties p = new Properties();
 
         System.out.println("Configuring the Retrieval Engine...");
-        storage = new CmisImageStorage(loadCmisConfig());
+//        storage = new DrawingStorage(loadCmisConfig());
+        storage = new DrawingStorage();
         e.setObjectStorage(storage);
         e.setQueryProcessor(new QueryProcessorDefaultImpl());
         e.getQueryProcessor().setIndexedObjectFactory(new SimpleIndexedObjectFactory());
@@ -467,29 +474,32 @@ public class EnContRAApplication extends Application {
         imageSearcher.setResultProvider(new DefaultResultProvider());
 
         //getting the descriptors
-        CompositeDescriptorExtractor compositeImageDescriptorExtractor = new CompositeDescriptorExtractor(CmisIndexedObject.class, null);
+        CompositeDescriptorExtractor compositeImageDescriptorExtractor = new CompositeDescriptorExtractor(IndexedObject.class, null);
 
         String descriptors = "";
         Set<Entry<CheckBox, Slider>> features = descriptorsUI.entrySet();
         for (Entry<CheckBox, Slider> pair : features) {
             if (pair.getKey().getCaption().contains("CEDD") && pair.getKey().booleanValue()) {
                 descriptors += "CEDD,";
-                compositeImageDescriptorExtractor.addExtractor(new CEDDDescriptor<CmisIndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                compositeImageDescriptorExtractor.addExtractor(new CEDDDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
             } else if (pair.getKey().getCaption().contains("ColorLayout") && pair.getKey().booleanValue()) {
                 descriptors += "ColorLayout,";
-                compositeImageDescriptorExtractor.addExtractor(new ColorLayoutDescriptor<CmisIndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                compositeImageDescriptorExtractor.addExtractor(new ColorLayoutDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
             } else if (pair.getKey().getCaption().contains("Dominant Color") && pair.getKey().booleanValue()) {
                 descriptors += "Dominant Color,";
-                compositeImageDescriptorExtractor.addExtractor(new DominantColorDescriptor<CmisIndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                compositeImageDescriptorExtractor.addExtractor(new DominantColorDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
             } else if (pair.getKey().getCaption().contains("EdgeHistogram") && pair.getKey().booleanValue()) {
                 descriptors += "EdgeHistogram,";
-                compositeImageDescriptorExtractor.addExtractor(new EdgeHistogramDescriptor<CmisIndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                compositeImageDescriptorExtractor.addExtractor(new EdgeHistogramDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
             } else if (pair.getKey().getCaption().contains("FCTH") && pair.getKey().booleanValue()) {
                 descriptors += "FCTH,";
-                compositeImageDescriptorExtractor.addExtractor(new FCTHDescriptor<CmisIndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+                compositeImageDescriptorExtractor.addExtractor(new FCTHDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
             } else if (pair.getKey().getCaption().contains("Scalable Color") && pair.getKey().booleanValue()) {
                 descriptors += "Scalable Color,";
                 compositeImageDescriptorExtractor.addExtractor(new ScalableColorDescriptor(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+            } else if (pair.getKey().getCaption().contains("Topogeo") && pair.getKey().booleanValue()) {
+                descriptors += "Topogeo,";
+                compositeImageDescriptorExtractor.addExtractor(new TopogeoDescriptorExtractor(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
             }
         }
         //take the "," from the last position
@@ -527,7 +537,7 @@ public class EnContRAApplication extends Application {
             e1.printStackTrace();
         }
 
-        e.getQueryProcessor().setSearcher("image", imageSearcher);
+        e.getQueryProcessor().setSearcher("drawing", imageSearcher);
 
         System.out.println("Loading some objects to the test indexes...");
 
@@ -644,17 +654,18 @@ public class EnContRAApplication extends Application {
     }
 
     //creates and performs a knn query to the engine
-    private ResultSet<CmisIndexedObject> knnQuery(File file) throws IOException {
+    private ResultSet<DrawingModel> knnQuery(File file) throws IOException {
         System.out.println("Creating a knn query...");
-        BufferedImage image = ImageIO.read(file);
+//        BufferedImage image = ImageIO.read(file);
+        Drawing drawing = DrawingFactory.getInstance().drawingFromSVG(file.getAbsolutePath());
 
         //Creating a combined query for the results
         CriteriaBuilderImpl cb = new CriteriaBuilderImpl();
-        CriteriaQuery<CmisIndexedObject> criteriaQuery = cb.createQuery(CmisIndexedObject.class);
+        CriteriaQuery<DrawingModel> criteriaQuery = cb.createQuery(DrawingModel.class);
 
         //Create the Model/Attributes Path
-        Path<CmisIndexedObject> model = criteriaQuery.from(CmisIndexedObject.class);
-        Path imageModel = model.get("image");
+        Path<DrawingModel> model = criteriaQuery.from(DrawingModel.class);
+        Path imageModel = model.get("drawing");
 
         String storageQuery = "";
         String keywordsStr = keywords.getValue().toString();
@@ -668,8 +679,8 @@ public class EnContRAApplication extends Application {
         }
 
         CriteriaQuery query = cb.createQuery().where(
-                cb.similar(imageModel, image)).distinct(true).limit(10);
-        ResultSet<CmisIndexedObject> results = null;
+                cb.similar(imageModel, drawing)).distinct(true).limit(10);
+        ResultSet<DrawingModel> results = null;
         if (!keywordsStr.equals("")) {
             query.setCriteria(new StorageCriteria(storageQuery));
         }

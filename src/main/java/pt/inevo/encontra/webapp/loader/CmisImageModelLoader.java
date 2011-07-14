@@ -2,13 +2,12 @@ package pt.inevo.encontra.webapp.loader;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import pt.inevo.encontra.CommonInfo;
+import pt.inevo.encontra.drawing.Drawing;
+import pt.inevo.encontra.drawing.DrawingFactory;
 import pt.inevo.encontra.util.FileUtil;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -36,10 +35,10 @@ public class CmisImageModelLoader {
         this.imagesPath = imagesPath;
     }
 
-    public CmisImageModel loadImage(File image) {
+    public DrawingModel loadImage(File image) {
 
         //for now only sets the filename
-        CmisImageModel im = new CmisImageModel(image.getAbsolutePath(), "", null);
+        DrawingModel im = new DrawingModel(image.getAbsolutePath(), "", null);
         im.setId(idCount.toString());
         idCount++;
 
@@ -50,8 +49,12 @@ public class CmisImageModelLoader {
 
         //get the bufferedimage
         try {
-            BufferedImage bufImg = ImageIO.read(image);
-            im.setImage(bufImg);
+            System.out.println("Drawing from " + image.getName());
+            Drawing drawing = DrawingFactory.getInstance().drawingFromSVG(image.getAbsolutePath());
+            im.setDrawing(drawing);
+
+//            BufferedImage bufImg = ImageIO.read(image);
+//            im.setImage(bufImg);
         } catch (IOException ex) {
             logger.error("Couldn't load the picture: " + image.getName());
             return null;
@@ -65,25 +68,25 @@ public class CmisImageModelLoader {
     }
 
     public void scan(String path) {
-        try {
+//        try {
             File root = new File(path);
-            String[] extensions = {"jpg", "png"};
+            String[] extensions = CommonInfo.FILE_TYPES;
             imagesFiles = FileUtil.findFilesRecursively(root, extensions);
             it = imagesFiles.iterator();
-            File annot = new File(path + "\\annotation.txt");
-            if (annot.exists()) {
-                BufferedReader reader = new BufferedReader(new FileReader(annot));
-                String line = "";
-                while ((line = reader.readLine()) != null) {
-                    String[] parts = line.split(" ");
-                    String[] name = parts[0].split("/");
-//                    annotations.put(name[1] + ".jpg", line);
-                    annotations.put(parts[0] + ".jpg", line);
-                }
-            }
-        } catch (IOException ex) {
-            logger.error("Couldn't load the annotations for the model.");
-        }
+//            File annot = new File(path + "\\annotation.txt");
+//            if (annot.exists()) {
+//                BufferedReader reader = new BufferedReader(new FileReader(annot));
+//                String line = "";
+//                while ((line = reader.readLine()) != null) {
+//                    String[] parts = line.split(" ");
+//                    String[] name = parts[0].split("/");
+////                    annotations.put(name[1] + ".jpg", line);
+//                    annotations.put(parts[0] + ".jpg", line);
+//                }
+//            }
+//        } catch (IOException ex) {
+//            logger.error("Couldn't load the annotations for the model.");
+//        }
     }
 
     public boolean hasNext() {

@@ -15,6 +15,7 @@ public class CmisImageLoaderActor extends UntypedActor {
     protected ArrayList<ActorRef> producers;
     protected CompletableFuture future;
     protected Searcher e;
+    protected int indexed = 0;
 
     public CmisImageLoaderActor() {
         producers = new ArrayList<ActorRef>();
@@ -49,7 +50,7 @@ public class CmisImageLoaderActor extends UntypedActor {
                 }
 
                 if (getContext().getSenderFuture().isDefined()) {
-                    future = (CompletableFuture) getContext().getSenderFuture().get();
+                    future = getContext().getSenderFuture().get();
                 }
 
                 for (ActorRef producer : producers) {
@@ -63,19 +64,25 @@ public class CmisImageLoaderActor extends UntypedActor {
 
             } else if (message.operation.equals("PROCESSONE")) {
                 File f = (File) message.obj;
-                CmisImageModel model = loader.loadImage(f);
+                DrawingModel model = loader.loadImage(f);
 
                 Message answer = new Message();
                 answer.operation = "ANSWER";
                 answer.obj = model;
                 getContext().replySafe(answer);
             } else if (message.operation.equals("ANSWER")) {
-                CmisImageModel model = (CmisImageModel) message.obj;
+                DrawingModel model = (DrawingModel) message.obj;
                 if (model != null) {    //save the object
-                    e.insert(model);
-                    model.getImage().flush();
-                    model.getImage().getGraphics().dispose();
-                    model.setImage(null);
+                    try {
+                        e.insert(model);
+                        indexed++;
+                        System.out.println("File " + model.getFilename() + " successfully processed!");
+                    } catch (Exception e) {
+                        System.out.println("Couldn't insert the file " + model.getFilename() + ". Possible reason: " + e.toString());
+                    }
+//                    model.getImage().flush();
+//                    model.getImage().getGraphics().dispose();
+//                    model.setImage(null);
                 }
 
                 if (loader.hasNext()) {
@@ -87,6 +94,7 @@ public class CmisImageLoaderActor extends UntypedActor {
                     Runtime r = Runtime.getRuntime();
                     long freeMem = r.freeMemory();
                     System.out.println("Free memory was: " + freeMem);
+                    System.out.println("Indexed " + indexed + " items!");
 
                     if (future != null) {
                         future.completeWithResult(true);

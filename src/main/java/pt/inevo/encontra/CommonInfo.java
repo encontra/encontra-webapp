@@ -12,5 +12,7 @@ public class CommonInfo {
     public static String CONFIG_FILE_INDEX_PATH = "./";
 
     public final static String[] DESCRIPTORS = new String[]{"CEDD", "ColorLayout", "Dominant Color",
-            "EdgeHistogram", "FCTH", "Scalable Color"};
+            "EdgeHistogram", "FCTH", "Scalable Color", "Topogeo"};
+
+    public final static String [] FILE_TYPES = {"svg"};
 }
