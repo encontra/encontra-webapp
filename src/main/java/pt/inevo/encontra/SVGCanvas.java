@@ -16,18 +16,17 @@
 
 package pt.inevo.encontra;
 
+import com.vaadin.data.Property;
+import com.vaadin.terminal.PaintException;
+import com.vaadin.terminal.PaintTarget;
+import com.vaadin.ui.AbstractComponent;
+import com.vaadin.ui.AbstractField;
+import com.vaadin.ui.ClientWidget;
+import pt.inevo.encontra.gwt.client.ui.VSVGCanvas;
+
 import java.awt.*;
 import java.lang.reflect.Method;
 import java.util.Map;
-
-import com.vaadin.data.Property;
-import com.vaadin.ui.AbstractComponent;
-import com.vaadin.ui.AbstractField;
-import pt.inevo.encontra.gwt.client.ui.VSVGCanvas;
-
-import com.vaadin.terminal.PaintException;
-import com.vaadin.terminal.PaintTarget;
-import com.vaadin.ui.ClientWidget;
 
 @SuppressWarnings("serial")
 @ClientWidget(VSVGCanvas.class)
@@ -118,8 +117,6 @@ public class SVGCanvas extends AbstractComponent {
         }
 
     }
-
-
 
     public void setColor( Color color) {
         this.color=color;

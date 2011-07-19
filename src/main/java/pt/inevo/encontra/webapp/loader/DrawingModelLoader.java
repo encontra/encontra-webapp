@@ -17,7 +17,7 @@ import java.util.List;
 * Loader for Objects of the type: ImageModel.
 * @author Ricardo
 */
-public class CmisImageModelLoader {
+public class DrawingModelLoader {
 
     protected String imagesPath = "";
     protected static Long idCount = 0l;
@@ -26,11 +26,11 @@ public class CmisImageModelLoader {
     protected HashMap<String, String> annotations = new HashMap<String, String>();
     protected Logger logger;
 
-    public CmisImageModelLoader() {
-        logger = LoggerFactory.getLogger(CmisImageModelLoader.class);
+    public DrawingModelLoader() {
+        logger = LoggerFactory.getLogger(DrawingModelLoader.class);
     }
 
-    public CmisImageModelLoader(String imagesPath) {
+    public DrawingModelLoader(String imagesPath) {
         this();
         this.imagesPath = imagesPath;
     }
@@ -39,26 +39,23 @@ public class CmisImageModelLoader {
 
         //for now only sets the filename
         DrawingModel im = new DrawingModel(image.getAbsolutePath(), "", null);
-        im.setId(idCount.toString());
+        im.setId(idCount);
         idCount++;
 
-        //get the description
+        //get the description - if it exists
         String name = image.getParentFile().getName() + "/" + image.getName();
         im.setDescription(annotations.get(name));
-        im.setCategory(im.getDescription());
 
-        //get the bufferedimage
+        //load the drawing
         try {
-            System.out.println("Drawing from " + image.getName());
             Drawing drawing = DrawingFactory.getInstance().drawingFromSVG(image.getAbsolutePath());
             im.setDrawing(drawing);
-
-//            BufferedImage bufImg = ImageIO.read(image);
-//            im.setImage(bufImg);
         } catch (IOException ex) {
-            logger.error("Couldn't load the picture: " + image.getName());
+            logger.error("Couldn't load the drawing: " + image.getName() + ".");
             return null;
         }
+
+        logger.info("Drawing " + image.getName() + " successfully loaded.");
 
         return im;
     }
@@ -68,25 +65,16 @@ public class CmisImageModelLoader {
     }
 
     public void scan(String path) {
-//        try {
-            File root = new File(path);
-            String[] extensions = CommonInfo.FILE_TYPES;
-            imagesFiles = FileUtil.findFilesRecursively(root, extensions);
-            it = imagesFiles.iterator();
-//            File annot = new File(path + "\\annotation.txt");
-//            if (annot.exists()) {
-//                BufferedReader reader = new BufferedReader(new FileReader(annot));
-//                String line = "";
-//                while ((line = reader.readLine()) != null) {
-//                    String[] parts = line.split(" ");
-//                    String[] name = parts[0].split("/");
-////                    annotations.put(name[1] + ".jpg", line);
-//                    annotations.put(parts[0] + ".jpg", line);
-//                }
-//            }
-//        } catch (IOException ex) {
-//            logger.error("Couldn't load the annotations for the model.");
-//        }
+        //detect if a path was specified
+        if (path.equals(CommonInfo.EMPTY_PATH)) {
+            logger.info("No path specified, so assuming it is the current directory!");
+            path = "./";
+        }
+
+        File root = new File(path);
+        String[] extensions = CommonInfo.FILE_TYPES;
+        imagesFiles = FileUtil.findFilesRecursively(root, extensions);
+        it = imagesFiles.iterator();
     }
 
     public boolean hasNext() {

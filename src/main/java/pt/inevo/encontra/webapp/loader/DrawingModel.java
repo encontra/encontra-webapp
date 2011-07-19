@@ -3,35 +3,41 @@ package pt.inevo.encontra.webapp.loader;
 import pt.inevo.encontra.drawing.Drawing;
 import pt.inevo.encontra.drawing.DrawingFactory;
 import pt.inevo.encontra.index.annotation.Indexed;
-import pt.inevo.encontra.storage.CmisObject;
+import pt.inevo.encontra.storage.IEntity;
 
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Transient;
-import java.io.*;
-import java.util.HashMap;
-import java.util.Map;
+import java.io.IOException;
 
+/**
+ * Drawing model entity. Represents a SVG drawing to be indexed.
+ */
 @Entity
-public class DrawingModel implements CmisObject {
+public class DrawingModel implements IEntity<Long> {
 
     @Id
-    private String id;
+    private Long id;
     private String filename;
     private String description;
 
     @Transient
     private Drawing drawing;
 
-    private String category;
-
-    public DrawingModel() {
-    }
+    public DrawingModel() {}
 
     public DrawingModel(String filename, String description, Drawing image) {
         this.filename = filename;
         this.description = description;
         this.drawing = image;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
     }
 
     @Indexed
@@ -68,69 +74,13 @@ public class DrawingModel implements CmisObject {
         this.drawing = image;
     }
 
-    public String getCategory(){
-        return this.category;
-    }
-
-    public void setCategory(String category){
-        this.category = category;
-    }
-
     @Override
     public String toString() {
         return "DrawingModel{"
                 + "id=" + id
-                + ", filename='" + filename + '\''
-                + ", content='" + description + '\''
-                + ", category='" + category + '\''
+                + ", filename='" + filename
+                + ", description='" + description
                 + ", drawing='" + drawing.toString()
                 + '}';
-    }
-
-    public Map<String, Object> getProperties() {
-        Map<String, Object> properties = new HashMap<String, Object>();
-        properties.put("cmis:name", filename);
-        properties.put("cmis:contentStreamFileName", category);
-        properties.put("cmis:changeToken", description);
-        return properties;
-    }
-
-    public byte[] getContent() {
-        try {
-            ByteArrayOutputStream output = new ByteArrayOutputStream();
-            ObjectOutputStream stream = new ObjectOutputStream(output);
-            stream.writeUTF(id);
-            stream.writeUTF(filename);
-            stream.writeUTF((description == null)? "" : description);
-            stream.writeUTF((category == null)? "" : category);
-            stream.flush();
-
-            byte [] content = output.toByteArray();
-            return content;
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return new byte[1];
-    }
-
-    public void setContent(byte[] content) {
-        try {
-            ByteArrayInputStream input = new ByteArrayInputStream(content);
-            ObjectInputStream stream = new ObjectInputStream(input);
-            id = stream.readUTF();
-            filename = stream.readUTF();
-            description = stream.readUTF();
-            category = stream.readUTF();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public void setId(String id) {
-        this.id = id;
     }
 }

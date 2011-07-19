@@ -1,5 +1,8 @@
 package pt.inevo.encontra;
 
+/**
+ * Common properties to be used in the EnContRA Web-application
+ */
 public class CommonInfo {
 
     public final static String CONFIG_FILE = "config.properties";
@@ -15,4 +18,6 @@ public class CommonInfo {
             "EdgeHistogram", "FCTH", "Scalable Color", "Topogeo"};
 
     public final static String [] FILE_TYPES = {"svg"};
+
+    public final static String EMPTY_PATH = "";
 }

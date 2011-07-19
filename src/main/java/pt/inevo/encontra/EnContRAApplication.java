@@ -33,78 +33,33 @@ import com.vaadin.ui.TextField;
 import com.vaadin.ui.Window;
 import com.vaadin.ui.Window.Notification;
 import org.vaadin.peter.imagestrip.ImageStrip;
-import pt.inevo.encontra.common.DefaultResultProvider;
 import pt.inevo.encontra.common.Result;
 import pt.inevo.encontra.common.ResultSet;
 import pt.inevo.encontra.convert.SVGConverter;
-import pt.inevo.encontra.descriptors.CompositeDescriptor;
-import pt.inevo.encontra.descriptors.CompositeDescriptorExtractor;
 import pt.inevo.encontra.drawing.Drawing;
 import pt.inevo.encontra.drawing.DrawingFactory;
-import pt.inevo.encontra.drawing.descriptors.TopogeoDescriptorExtractor;
-import pt.inevo.encontra.engine.SimpleIndexedObjectFactory;
 import pt.inevo.encontra.geometry.Polygon;
 import pt.inevo.encontra.geometry.PolygonSet;
-import pt.inevo.encontra.image.descriptors.*;
-import pt.inevo.encontra.index.IndexedObject;
-import pt.inevo.encontra.index.SimpleIndex;
-import pt.inevo.encontra.index.search.AbstractSearcher;
-import pt.inevo.encontra.index.search.ParallelSimpleSearcher;
-import pt.inevo.encontra.lucene.index.LuceneIndex;
-import pt.inevo.encontra.nbtree.index.BTreeIndex;
-import pt.inevo.encontra.nbtree.index.ParallelNBTreeSearcher;
 import pt.inevo.encontra.query.CriteriaQuery;
 import pt.inevo.encontra.query.Path;
-import pt.inevo.encontra.query.QueryProcessorDefaultImpl;
-import pt.inevo.encontra.query.QueryProcessorDefaultParallelImpl;
 import pt.inevo.encontra.query.criteria.CriteriaBuilderImpl;
-import pt.inevo.encontra.query.criteria.StorageCriteria;
 import pt.inevo.encontra.service.PolygonDetectionService;
 import pt.inevo.encontra.service.impl.PolygonDetectionServiceImpl;
-import pt.inevo.encontra.storage.IEntity;
-import pt.inevo.encontra.storage.IEntry;
-import pt.inevo.encontra.storage.JPAObjectStorage;
-import pt.inevo.encontra.webapp.loader.*;
+import pt.inevo.encontra.webapp.engine.WebAppEngine;
+import pt.inevo.encontra.webapp.loader.DrawingLoaderActor;
+import pt.inevo.encontra.webapp.loader.DrawingModel;
+import pt.inevo.encontra.webapp.loader.DrawingModelLoader;
+import pt.inevo.encontra.webapp.loader.Message;
 import scala.Option;
 
-import javax.persistence.EntityManager;
-import javax.persistence.EntityManagerFactory;
-import javax.persistence.Persistence;
 import java.awt.*;
 import java.io.*;
 import java.util.*;
-import java.util.Map.Entry;
+import java.util.logging.Logger;
 
 public class EnContRAApplication extends Application {
 
-    /**
-     * Fake DrawingStorage - It actually saves DrawingModel and uses JPA storage instead of CMIS.
-     */
-    public class DrawingStorage extends JPAObjectStorage<String, DrawingModel> {
-
-        EntityManagerFactory emf;
-        EntityManager em;
-
-        DrawingStorage() {
-            super();
-
-            emf = Persistence.createEntityManagerFactory("manager");
-            em = emf.createEntityManager(); // Retrieve an application managed entity manager
-            this.setEntityManager(em);
-
-        }
-    }
-
-    public class WebAppEngine <O extends IEntity> extends AbstractSearcher<O> {
-
-        @Override
-        protected Result<O> getResultObject(Result<IEntry> entryresult) {
-            Object result = storage.get(entryresult.getResultObject().getId());
-            return new Result<O>((O) result);
-        }
-    }
-
-    private AbstractSearcher<DrawingModel> e = new WebAppEngine<DrawingModel> ();
+    private WebAppEngine e = new WebAppEngine();
     private Window main = new Window("EnContRA");
     private SplitPanel horiz = new SplitPanel();
     private ImageUploader uploader;
@@ -116,7 +71,7 @@ public class EnContRAApplication extends Application {
     private HashMap<ImageStrip.Image, DrawingModel> resultImages = new HashMap<ImageStrip.Image, DrawingModel>();
     final Map<String, String> databases = new HashMap<String, String>();
     private static Properties props = new Properties();
-    private DrawingStorage storage;
+    private static Logger log = Logger.getLogger(EnContRAApplication.class.toString());
 
     @Override
     public void init() {
@@ -359,8 +314,8 @@ public class EnContRAApplication extends Application {
                         final ImageStrip.Image img = (ImageStrip.Image) event.getProperty().getValue();
                         DrawingModel selectedModel = resultImages.get(img);
 
-//                        Embedded e = new Embedded("", new FileResource(new File(selectedModel.getFilename()), EnContRAApplication.this));
-//                        e.setHeight("250");
+                        Embedded e = new Embedded("", new FileResource(new File(selectedModel.getFilename()), EnContRAApplication.this));
+                        e.setHeight("250");
                         VerticalLayout v = new VerticalLayout();
                         v.setMargin(new Layout.MarginInfo(true, true, true, true));
                         v.setSpacing(true);
@@ -457,76 +412,79 @@ public class EnContRAApplication extends Application {
         Properties p = new Properties();
 
         System.out.println("Configuring the Retrieval Engine...");
+
+
+
 //        storage = new DrawingStorage(loadCmisConfig());
-        storage = new DrawingStorage();
-        e.setObjectStorage(storage);
-        e.setQueryProcessor(new QueryProcessorDefaultImpl());
-        e.getQueryProcessor().setIndexedObjectFactory(new SimpleIndexedObjectFactory());
-        e.getQueryProcessor().setTopSearcher(e);
-        e.setResultProvider(new DefaultResultProvider());
+//        storage = new DrawingStorage();
+//        e.setObjectStorage(storage);
+//        e.setQueryProcessor(new QueryProcessorDefaultImpl());
+//        e.getQueryProcessor().setIndexedObjectFactory(new SimpleIndexedObjectFactory());
+//        e.getQueryProcessor().setTopSearcher(e);
+//        e.setResultProvider(new DefaultResultProvider());
 
-        //A searcher for the image content (using the selected descriptors)
-        AbstractSearcher imageSearcher = null;
-        if (indexSelector.getValue().equals("Lucene Index"))
-            imageSearcher = new ParallelSimpleSearcher();
-        else imageSearcher = new ParallelNBTreeSearcher();
-        imageSearcher.setQueryProcessor(new QueryProcessorDefaultParallelImpl());
-        imageSearcher.setResultProvider(new DefaultResultProvider());
-
-        //getting the descriptors
-        CompositeDescriptorExtractor compositeImageDescriptorExtractor = new CompositeDescriptorExtractor(IndexedObject.class, null);
-
-        String descriptors = "";
-        Set<Entry<CheckBox, Slider>> features = descriptorsUI.entrySet();
-        for (Entry<CheckBox, Slider> pair : features) {
-            if (pair.getKey().getCaption().contains("CEDD") && pair.getKey().booleanValue()) {
-                descriptors += "CEDD,";
-                compositeImageDescriptorExtractor.addExtractor(new CEDDDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
-            } else if (pair.getKey().getCaption().contains("ColorLayout") && pair.getKey().booleanValue()) {
-                descriptors += "ColorLayout,";
-                compositeImageDescriptorExtractor.addExtractor(new ColorLayoutDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
-            } else if (pair.getKey().getCaption().contains("Dominant Color") && pair.getKey().booleanValue()) {
-                descriptors += "Dominant Color,";
-                compositeImageDescriptorExtractor.addExtractor(new DominantColorDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
-            } else if (pair.getKey().getCaption().contains("EdgeHistogram") && pair.getKey().booleanValue()) {
-                descriptors += "EdgeHistogram,";
-                compositeImageDescriptorExtractor.addExtractor(new EdgeHistogramDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
-            } else if (pair.getKey().getCaption().contains("FCTH") && pair.getKey().booleanValue()) {
-                descriptors += "FCTH,";
-                compositeImageDescriptorExtractor.addExtractor(new FCTHDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
-            } else if (pair.getKey().getCaption().contains("Scalable Color") && pair.getKey().booleanValue()) {
-                descriptors += "Scalable Color,";
-                compositeImageDescriptorExtractor.addExtractor(new ScalableColorDescriptor(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
-            } else if (pair.getKey().getCaption().contains("Topogeo") && pair.getKey().booleanValue()) {
-                descriptors += "Topogeo,";
-                compositeImageDescriptorExtractor.addExtractor(new TopogeoDescriptorExtractor(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
-            }
-        }
-        //take the "," from the last position
-        descriptors = descriptors.substring(0, descriptors.length()-1);
-
-        p.put(CommonInfo.CONFIG_FILE_DESCRIPTORS_PROPERTY, descriptors);
+//        //A searcher for the image content (using the selected descriptors)
+//        AbstractSearcher imageSearcher = null;
+//        if (indexSelector.getValue().equals("Lucene Index"))
+//            imageSearcher = new ParallelSimpleSearcher();
+//        else imageSearcher = new ParallelNBTreeSearcher();
+//        imageSearcher.setQueryProcessor(new QueryProcessorDefaultParallelImpl());
+//        imageSearcher.setResultProvider(new DefaultResultProvider());
+//
+//        //getting the descriptors
+//        CompositeDescriptorExtractor compositeImageDescriptorExtractor = new CompositeDescriptorExtractor(IndexedObject.class, null);
+//
+//        String descriptors = "";
+//        Set<Entry<CheckBox, Slider>> features = descriptorsUI.entrySet();
+//        for (Entry<CheckBox, Slider> pair : features) {
+//            if (pair.getKey().getCaption().contains("CEDD") && pair.getKey().booleanValue()) {
+//                descriptors += "CEDD,";
+//                compositeImageDescriptorExtractor.addExtractor(new CEDDDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+//            } else if (pair.getKey().getCaption().contains("ColorLayout") && pair.getKey().booleanValue()) {
+//                descriptors += "ColorLayout,";
+//                compositeImageDescriptorExtractor.addExtractor(new ColorLayoutDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+//            } else if (pair.getKey().getCaption().contains("Dominant Color") && pair.getKey().booleanValue()) {
+//                descriptors += "Dominant Color,";
+//                compositeImageDescriptorExtractor.addExtractor(new DominantColorDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+//            } else if (pair.getKey().getCaption().contains("EdgeHistogram") && pair.getKey().booleanValue()) {
+//                descriptors += "EdgeHistogram,";
+//                compositeImageDescriptorExtractor.addExtractor(new EdgeHistogramDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+//            } else if (pair.getKey().getCaption().contains("FCTH") && pair.getKey().booleanValue()) {
+//                descriptors += "FCTH,";
+//                compositeImageDescriptorExtractor.addExtractor(new FCTHDescriptor<IndexedObject>(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+//            } else if (pair.getKey().getCaption().contains("Scalable Color") && pair.getKey().booleanValue()) {
+//                descriptors += "Scalable Color,";
+//                compositeImageDescriptorExtractor.addExtractor(new ScalableColorDescriptor(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+//            } else if (pair.getKey().getCaption().contains("Topogeo") && pair.getKey().booleanValue()) {
+//                descriptors += "Topogeo,";
+//                compositeImageDescriptorExtractor.addExtractor(new TopogeoDescriptorExtractor(), Double.parseDouble(pair.getValue().getValue().toString()) / 100);
+//            }
+//        }
+//        //take the "," from the last position
+//        descriptors = descriptors.substring(0, descriptors.length()-1);
+//
+//        p.put(CommonInfo.CONFIG_FILE_DESCRIPTORS_PROPERTY, descriptors);
         p.put(CommonInfo.CONFIG_FILE_INDEX_PATH_PROPERTY, CommonInfo.CONFIG_FILE_INDEX_PATH);
-
-        imageSearcher.setDescriptorExtractor(compositeImageDescriptorExtractor);
-
-        String index = "";
-        if (indexSelector.getValue().equals("Btree Index")) { //using a BTreeIndex
-            index = "Btree Index";
-            imageSearcher.setIndex(new BTreeIndex(CommonInfo.CONFIG_FILE_INDEX_PATH, "webappBTree", CompositeDescriptor.class));
-        } else if (indexSelector.getValue().equals("Lucene Index")) { //using a LuceneIndex
-            index = "Lucene Index";
-            imageSearcher.setIndex(new LuceneIndex("LuceneIndex", CompositeDescriptor.class));
-            imageSearcher.setDescriptorExtractor(compositeImageDescriptorExtractor);
-        } else { //using a SimpleIndex
-            index = "SimpleIndex";
-            imageSearcher.setIndex(new SimpleIndex(CompositeDescriptor.class));
-        }
-
-        p.put(CommonInfo.CONFIG_FILE_INDEX_PROPERTY, index);
-
+//
+//        imageSearcher.setDescriptorExtractor(compositeImageDescriptorExtractor);
+//
+//        String index = "";
+//        if (indexSelector.getValue().equals("Btree Index")) { //using a BTreeIndex
+//            index = "Btree Index";
+//            imageSearcher.setIndex(new BTreeIndex(CommonInfo.CONFIG_FILE_INDEX_PATH, "webappBTree", CompositeDescriptor.class));
+//        } else if (indexSelector.getValue().equals("Lucene Index")) { //using a LuceneIndex
+//            index = "Lucene Index";
+//            imageSearcher.setIndex(new LuceneIndex("LuceneIndex", CompositeDescriptor.class));
+//            imageSearcher.setDescriptorExtractor(compositeImageDescriptorExtractor);
+//        } else { //using a SimpleIndex
+//            index = "SimpleIndex";
+//            imageSearcher.setIndex(new SimpleIndex(CompositeDescriptor.class));
+//        }
+//
+//        p.put(CommonInfo.CONFIG_FILE_INDEX_PROPERTY, index);
+//
         p.put(CommonInfo.CONFIG_FILE_DATABASE_PROPERTY, databaseSelector.getValue());
-
+//
         try {
             OutputStream out = new FileOutputStream(new File(CommonInfo.CONFIG_FILE));
             p.store(out, "EnContRAAplication configuration file");
@@ -536,8 +494,8 @@ public class EnContRAApplication extends Application {
         } catch (IOException e1) {
             e1.printStackTrace();
         }
-
-        e.getQueryProcessor().setSearcher("drawing", imageSearcher);
+//
+//        e.getQueryProcessor().setSearcher("drawing", imageSearcher);
 
         System.out.println("Loading some objects to the test indexes...");
 
@@ -563,24 +521,24 @@ public class EnContRAApplication extends Application {
             return;
         }
 
-        String index = p.getProperty(CommonInfo.CONFIG_FILE_INDEX_PROPERTY);
+//        String index = p.getProperty(CommonInfo.CONFIG_FILE_INDEX_PROPERTY);
         CommonInfo.CONFIG_FILE_INDEX_PATH = p.getProperty(CommonInfo.CONFIG_FILE_INDEX_PATH_PROPERTY);
-        String [] descriptors = p.getProperty(CommonInfo.CONFIG_FILE_DESCRIPTORS_PROPERTY).split(",");
+//        String [] descriptors = p.getProperty(CommonInfo.CONFIG_FILE_DESCRIPTORS_PROPERTY).split(",");
         String database = p.getProperty(CommonInfo.CONFIG_FILE_DATABASE_PROPERTY);
 
         databaseSelector.setValue(database);
-        indexSelector.setValue(index);
+//        indexSelector.setValue(index);
 
-        Set<CheckBox> checkBoxes = descriptorsUI.keySet();
-        for (CheckBox check : checkBoxes) {
-            for (String desc: descriptors) {
-                if (desc.equals(check.getCaption())) {
-                    check.setValue(true);
-                    descriptorsUI.get(check).setEnabled(true);
-                    break;
-                }
-            }
-        }
+//        Set<CheckBox> checkBoxes = descriptorsUI.keySet();
+//        for (CheckBox check : checkBoxes) {
+//            for (String desc: descriptors) {
+//                if (desc.equals(check.getCaption())) {
+//                    check.setValue(true);
+//                    descriptorsUI.get(check).setEnabled(true);
+//                    break;
+//                }
+//            }
+//        }
 
         setupEngine(false);
     }
@@ -608,13 +566,13 @@ public class EnContRAApplication extends Application {
     //load the image database
     private void load(String databaseFolder) {
         System.out.println("Loading some objects to the test indexes...");
-        CmisImageModelLoader loader = new CmisImageModelLoader(databaseFolder);
+        DrawingModelLoader loader = new DrawingModelLoader(databaseFolder);
         loader.scan();
 
         ActorRef loaderActor = UntypedActor.actorOf(new UntypedActorFactory() {
             @Override
             public UntypedActor create() {
-                return new CmisImageLoaderActor(e);
+                return new DrawingLoaderActor(e);
             }
         }).start();
 
@@ -667,23 +625,23 @@ public class EnContRAApplication extends Application {
         Path<DrawingModel> model = criteriaQuery.from(DrawingModel.class);
         Path imageModel = model.get("drawing");
 
-        String storageQuery = "";
-        String keywordsStr = keywords.getValue().toString();
-        if (!keywordsStr.equals("")) {
-            String [] keywordsSplit = keywordsStr.split(",");
-            for (int i = 0; i < keywordsSplit.length ; i++) {
-                storageQuery += "cmis:contentStreamFileName like '%" + keywordsSplit[i].toLowerCase() + "%' ";
-                if (i+1 < keywordsSplit.length)
-                    storageQuery += "and ";
-            }
-        }
+//        String storageQuery = "";
+//        String keywordsStr = keywords.getValue().toString();
+//        if (!keywordsStr.equals("")) {
+//            String [] keywordsSplit = keywordsStr.split(",");
+//            for (int i = 0; i < keywordsSplit.length ; i++) {
+//                storageQuery += "cmis:contentStreamFileName like '%" + keywordsSplit[i].toLowerCase() + "%' ";
+//                if (i+1 < keywordsSplit.length)
+//                    storageQuery += "and ";
+//            }
+//        }
 
         CriteriaQuery query = cb.createQuery().where(
                 cb.similar(imageModel, drawing)).distinct(true).limit(10);
         ResultSet<DrawingModel> results = null;
-        if (!keywordsStr.equals("")) {
-            query.setCriteria(new StorageCriteria(storageQuery));
-        }
+//        if (!keywordsStr.equals("")) {
+//            query.setCriteria(new StorageCriteria(storageQuery));
+//        }
 
         results = e.search(query);
         System.out.println("...done! Query returned: " + results.getSize() + " results.");

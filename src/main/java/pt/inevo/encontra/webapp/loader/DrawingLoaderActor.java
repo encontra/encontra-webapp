@@ -8,25 +8,31 @@ import pt.inevo.encontra.index.search.Searcher;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-public class CmisImageLoaderActor extends UntypedActor {
+/**
+ * An actor-based drawing loader.
+ */
+public class DrawingLoaderActor extends UntypedActor {
 
-    protected CmisImageModelLoader loader;
+    protected DrawingModelLoader loader;
     protected ArrayList<ActorRef> producers;
     protected CompletableFuture future;
     protected Searcher e;
-    protected int indexed = 0;
+    protected int indexed = 0, notIndexed = 0;
+    protected Logger log = Logger.getLogger(DrawingLoaderActor.class.toString());
 
-    public CmisImageLoaderActor() {
+    public DrawingLoaderActor() {
         producers = new ArrayList<ActorRef>();
     }
 
-    public CmisImageLoaderActor(Searcher searcher) {
+    public DrawingLoaderActor(Searcher searcher) {
         this();
         this.e = searcher;
     }
 
-    public CmisImageLoaderActor(CmisImageModelLoader loader) {
+    public DrawingLoaderActor(DrawingModelLoader loader) {
         this();
         this.loader = loader;
     }
@@ -36,14 +42,14 @@ public class CmisImageLoaderActor extends UntypedActor {
         if (o instanceof Message) {
             Message message = (Message) o;
             if (message.operation.equals("PROCESSALL")) {
-                loader = (CmisImageModelLoader) message.obj;
+                loader = (DrawingModelLoader) message.obj;
 
                 for (int i = 0; i < 10; i++) {
                     ActorRef actor = UntypedActor.actorOf(new UntypedActorFactory() {
 
                         @Override
                         public UntypedActor create() {
-                            return new CmisImageLoaderActor(loader);
+                            return new DrawingLoaderActor(loader);
                         }
                     }).start();
                     producers.add(actor);
@@ -76,13 +82,12 @@ public class CmisImageLoaderActor extends UntypedActor {
                     try {
                         e.insert(model);
                         indexed++;
-                        System.out.println("File " + model.getFilename() + " successfully processed!");
+                        log.info("Drawing " + model.getFilename() + " successfully indexed!");
+                        System.out.println();
                     } catch (Exception e) {
-                        System.out.println("Couldn't insert the file " + model.getFilename() + ". Possible reason: " + e.toString());
+                        notIndexed++;
+                        log.log(Level.SEVERE, "Couldn't insert the file " + model.getFilename() + ". Possible reason: " + e.toString());
                     }
-//                    model.getImage().flush();
-//                    model.getImage().getGraphics().dispose();
-//                    model.setImage(null);
                 }
 
                 if (loader.hasNext()) {
@@ -93,8 +98,8 @@ public class CmisImageLoaderActor extends UntypedActor {
                 } else {
                     Runtime r = Runtime.getRuntime();
                     long freeMem = r.freeMemory();
-                    System.out.println("Free memory was: " + freeMem);
-                    System.out.println("Indexed " + indexed + " items!");
+                    log.info("Free memory was: " + freeMem);
+                    log.info("Indexed " + indexed + " items, from a total of " + (indexed + notIndexed) + "!");
 
                     if (future != null) {
                         future.completeWithResult(true);
