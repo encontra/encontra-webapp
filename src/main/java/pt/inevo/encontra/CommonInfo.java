@@ -17,7 +17,9 @@ public class CommonInfo {
     public final static String[] DESCRIPTORS = new String[]{"CEDD", "ColorLayout", "Dominant Color",
             "EdgeHistogram", "FCTH", "Scalable Color", "Topogeo"};
 
-    public final static String [] FILE_TYPES = {"svg"};
+    public final static String [] FILE_TYPES_VECTORIAL = {"svg"};
+    public final static String [] FILE_TYPES_IMAGE = {"png", "jpg"};
+    public final static String [] FILE_TYPES = FILE_TYPES_VECTORIAL;
 
     public final static String EMPTY_PATH = "";
 }

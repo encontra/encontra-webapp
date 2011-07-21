@@ -83,7 +83,14 @@ public class DrawingLoaderActor extends UntypedActor {
                         e.insert(model);
                         indexed++;
                         log.info("Drawing " + model.getFilename() + " successfully indexed!");
-                        System.out.println();
+                        model.setImage(null);
+                        model.setDrawing(null);
+
+                        if ((indexed % 10) == 0) {
+                            Runtime r = Runtime.getRuntime();
+                            r.gc();
+                        }
+
                     } catch (Exception e) {
                         notIndexed++;
                         log.log(Level.SEVERE, "Couldn't insert the file " + model.getFilename() + ". Possible reason: " + e.toString());
@@ -97,6 +104,7 @@ public class DrawingLoaderActor extends UntypedActor {
                     getContext().getSender().get().sendOneWay(m, getContext());
                 } else {
                     Runtime r = Runtime.getRuntime();
+                    r.gc();
                     long freeMem = r.freeMemory();
                     log.info("Free memory was: " + freeMem);
                     log.info("Indexed " + indexed + " items, from a total of " + (indexed + notIndexed) + "!");

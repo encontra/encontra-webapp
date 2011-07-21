@@ -29,12 +29,14 @@ import com.vaadin.ui.AbstractSelect.Filtering;
 import com.vaadin.ui.*;
 import com.vaadin.ui.Button;
 import com.vaadin.ui.Button.ClickEvent;
+import com.vaadin.ui.Label;
 import com.vaadin.ui.TextField;
 import com.vaadin.ui.Window;
 import com.vaadin.ui.Window.Notification;
 import org.vaadin.peter.imagestrip.ImageStrip;
 import pt.inevo.encontra.common.Result;
 import pt.inevo.encontra.common.ResultSet;
+import pt.inevo.encontra.common.ResultSetDefaultImpl;
 import pt.inevo.encontra.convert.SVGConverter;
 import pt.inevo.encontra.drawing.Drawing;
 import pt.inevo.encontra.drawing.DrawingFactory;
@@ -52,7 +54,9 @@ import pt.inevo.encontra.webapp.loader.DrawingModelLoader;
 import pt.inevo.encontra.webapp.loader.Message;
 import scala.Option;
 
+import javax.imageio.ImageIO;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.*;
 import java.util.*;
 import java.util.logging.Logger;
@@ -72,6 +76,7 @@ public class EnContRAApplication extends Application {
     final Map<String, String> databases = new HashMap<String, String>();
     private static Properties props = new Properties();
     private static Logger log = Logger.getLogger(EnContRAApplication.class.toString());
+    private CheckBox imageCheckbox, vectorialCheckbox;
 
     @Override
     public void init() {
@@ -324,28 +329,28 @@ public class EnContRAApplication extends Application {
 
                             @Override
                             public void buttonClick(ClickEvent event) {
-//                                try {
-//                                    String filename = resultImages.get(img).getFilename();
-//                                    File f = new File(filename);
-//                                    uploader.setFile(f);
-//                                    queryByExample(f);
-//                                    resetQBEHorizPanel();
-//
-//                                } catch (IOException ex) {
-//                                    ex.printStackTrace();
-//                                    main.showNotification("There was an error when performing the query, please re-try!",
-//                                            Notification.TYPE_ERROR_MESSAGE);
-//                                }
+                                try {
+                                    String filename = resultImages.get(img).getFilename();
+                                    File f = new File(filename);
+                                    uploader.setFile(f);
+                                    queryByExample(f);
+                                    resetQBEHorizPanel();
+
+                                } catch (IOException ex) {
+                                    ex.printStackTrace();
+                                    main.showNotification("There was an error when performing the query, please re-try!",
+                                            Notification.TYPE_ERROR_MESSAGE);
+                                }
                             }
                         });
                         v.addComponent(findSimilar);
-//                        v.addComponent(e);
+                        v.addComponent(e);
 
-//                        HorizontalLayout fileNameLayout = new HorizontalLayout();
-//                        Label filenameLabel = new Label();
-//                        filenameLabel.setCaption("Filename: ");
-//                        filenameLabel.setValue(selectedModel.getFilename());
-//                        fileNameLayout.addComponent(filenameLabel);
+                        HorizontalLayout fileNameLayout = new HorizontalLayout();
+                        Label filenameLabel = new Label();
+                        filenameLabel.setCaption("Filename: ");
+                        filenameLabel.setValue(selectedModel.getFilename());
+                        fileNameLayout.addComponent(filenameLabel);
 
 //                        HorizontalLayout categoryLayout = new HorizontalLayout();
 //                        Label categoryLabel = new Label();
@@ -353,10 +358,10 @@ public class EnContRAApplication extends Application {
 //                        categoryLabel.setValue(selectedModel.getCategory());
 //                        categoryLayout.addComponent(categoryLabel);
 
-//                        v.addComponent(fileNameLayout);
+                        v.addComponent(fileNameLayout);
 //                        v.addComponent(categoryLayout);
 
-                        if (horiz.getSecondComponent() != null){
+                        if (horiz.getSecondComponent() != null) {
                             horiz.removeComponent(horiz.getSecondComponent());
                         }
                         horiz.addComponent(v);
@@ -366,15 +371,15 @@ public class EnContRAApplication extends Application {
                 resultImages.clear();
                 for (Result<DrawingModel> r : results) {
 
-                   System.out.println("Result Id:" + r.getResultObject().getId());
+                    System.out.println("Result Id:" + r.getResultObject().getId());
 
-                   File tmpFile= File.createTempFile("tempFile" + r.getResultObject().getId(), ".png");
+                    File tmpFile = File.createTempFile("tempFile" + r.getResultObject().getId(), ".png");
                     String filename = tmpFile.getAbsolutePath();
-                    filename = filename.substring(0, filename.length()-4);
-                   r.getResultObject().getDrawing().export(filename);
-//                   ImageIO.write(r.getResultObject().getValue(), "jpg", tmpFile);
+                    filename = filename.substring(0, filename.length() - 4);
+//                   r.getResultObject().getDrawing().export(filename);
+                    ImageIO.write(r.getResultObject().getImage(), "png", tmpFile);
 
-                   ImageStrip.Image img = strip.addImage(new FileResource(tmpFile, EnContRAApplication.this));
+                    ImageStrip.Image img = strip.addImage(new FileResource(tmpFile, EnContRAApplication.this));
 
                     //to keep track of which image was selected and display it later
                     resultImages.put(img, r.getResultObject());
@@ -382,6 +387,30 @@ public class EnContRAApplication extends Application {
             }
         });
         h.addComponent(searchButton);
+
+        HorizontalLayout hl = new HorizontalLayout();
+        hl.setSpacing(true);
+        imageCheckbox = new CheckBox("Image");
+        imageCheckbox.setDescription("Use image Descriptors");
+        imageCheckbox.setEnabled(true);
+        imageCheckbox.setImmediate(true);
+//        cb.addListener(new Button.ClickListener() {
+//
+//            public void buttonClick(ClickEvent event) {
+//                boolean enabled = event.getButton().booleanValue();
+//                Slider s = descriptorsUI.get(event.getButton());
+//                s.setEnabled(enabled);
+//            }
+//        });
+
+        h.addComponent(imageCheckbox);
+
+        vectorialCheckbox = new CheckBox("Vectorial");
+        vectorialCheckbox.setDescription("Use Vector Descriptors");
+        vectorialCheckbox.setEnabled(true);
+        vectorialCheckbox.setImmediate(true);
+
+        h.addComponent(vectorialCheckbox);
 
         root.addComponent(h);
 
@@ -391,8 +420,8 @@ public class EnContRAApplication extends Application {
     }
 
     //resets the second component of the horizontal panel
-    private void resetQBEHorizPanel(){
-        if (horiz.getSecondComponent() != null){
+    private void resetQBEHorizPanel() {
+        if (horiz.getSecondComponent() != null) {
             horiz.removeComponent(horiz.getSecondComponent());
             VerticalLayout v = new VerticalLayout();
             v.addComponent(new com.vaadin.ui.Label("Select an image from above to display it here."));
@@ -402,7 +431,7 @@ public class EnContRAApplication extends Application {
         }
     }
 
-    private void setupEngine(boolean load){
+    private void setupEngine(boolean load) {
         if (indexSelector.getValue() == null || databaseSelector.getValue() == null) {
             main.showNotification("You must select a database, an index to be used and at least one descriptor type.",
                     Notification.TYPE_ERROR_MESSAGE);
@@ -412,7 +441,6 @@ public class EnContRAApplication extends Application {
         Properties p = new Properties();
 
         System.out.println("Configuring the Retrieval Engine...");
-
 
 
 //        storage = new DrawingStorage(loadCmisConfig());
@@ -507,7 +535,7 @@ public class EnContRAApplication extends Application {
     }
 
     //load configuration file
-    private void loadConfig(){
+    private void loadConfig() {
         InputStream inputStream = null;
         Properties p = new Properties();
         try {
@@ -545,6 +573,7 @@ public class EnContRAApplication extends Application {
 
     /**
      * Loads the CMIS configuration file.
+     *
      * @return
      */
     private Map<String, String> loadCmisConfig() {
@@ -623,7 +652,8 @@ public class EnContRAApplication extends Application {
 
         //Create the Model/Attributes Path
         Path<DrawingModel> model = criteriaQuery.from(DrawingModel.class);
-        Path imageModel = model.get("drawing");
+        Path drawingPath = model.get("drawing");
+        Path imagePath = model.get("image");
 
 //        String storageQuery = "";
 //        String keywordsStr = keywords.getValue().toString();
@@ -636,8 +666,32 @@ public class EnContRAApplication extends Application {
 //            }
 //        }
 
-        CriteriaQuery query = cb.createQuery().where(
-                cb.similar(imageModel, drawing)).distinct(true).limit(10);
+//        CriteriaQuery query = cb.createQuery().where(
+//                cb.similar(drawingPath, drawing)).distinct(true).limit(10);
+
+        BufferedImage img = null;
+        try {
+            img = drawing.getImage();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        CriteriaQuery query = null;
+        if (imageCheckbox.booleanValue() && vectorialCheckbox.booleanValue())  {
+            query = cb.createQuery().where(
+                cb.and(cb.similar(imagePath, img)), cb.similar(drawingPath, drawing)).distinct(true).limit(20);
+        } else if (imageCheckbox.booleanValue()) {
+            query = cb.createQuery().where(
+                cb.similar(imagePath, img)).distinct(true).limit(10);
+        } else if (vectorialCheckbox.booleanValue()) {
+            query = cb.createQuery().where(
+                cb.similar(drawingPath, drawing)).distinct(true).limit(10);
+        } else {
+            main.showNotification("You must select at least a query type!",
+                    Notification.TYPE_ERROR_MESSAGE);
+            return new ResultSetDefaultImpl<DrawingModel>();
+        }
+//
         ResultSet<DrawingModel> results = null;
 //        if (!keywordsStr.equals("")) {
 //            query.setCriteria(new StorageCriteria(storageQuery));

@@ -8,6 +8,7 @@ import pt.inevo.encontra.storage.IEntity;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Transient;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 
 /**
@@ -23,6 +24,9 @@ public class DrawingModel implements IEntity<Long> {
 
     @Transient
     private Drawing drawing;
+
+    @Transient
+    private BufferedImage image;
 
     public DrawingModel() {}
 
@@ -63,6 +67,7 @@ public class DrawingModel implements IEntity<Long> {
         if (drawing == null) {
             try {
                 drawing = DrawingFactory.getInstance().drawingFromSVG(this.getFilename());
+                image = drawing.getImage();
             } catch (IOException e) {
                 return null;
             }
@@ -82,5 +87,22 @@ public class DrawingModel implements IEntity<Long> {
                 + ", description='" + description
                 + ", drawing='" + drawing.toString()
                 + '}';
+    }
+
+    @Indexed
+    public BufferedImage getImage() {
+        if (image == null) {
+            Drawing d = getDrawing();
+            try {
+                image = d.getImage();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return image;
+    }
+
+    public void setImage(BufferedImage image) {
+        this.image = image;
     }
 }

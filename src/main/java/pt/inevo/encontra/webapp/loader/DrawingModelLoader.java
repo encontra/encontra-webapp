@@ -50,6 +50,7 @@ public class DrawingModelLoader {
         try {
             Drawing drawing = DrawingFactory.getInstance().drawingFromSVG(image.getAbsolutePath());
             im.setDrawing(drawing);
+            im.setImage(drawing.getImage());
         } catch (IOException ex) {
             logger.error("Couldn't load the drawing: " + image.getName() + ".");
             return null;
