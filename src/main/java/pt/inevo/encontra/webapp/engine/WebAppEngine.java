@@ -4,7 +4,7 @@ import pt.inevo.encontra.CommonInfo;
 import pt.inevo.encontra.common.DefaultResultProvider;
 import pt.inevo.encontra.common.Result;
 import pt.inevo.encontra.common.ResultSet;
-import pt.inevo.encontra.common.ResultSetDefaultImpl;
+import pt.inevo.encontra.descriptors.Descriptor;
 import pt.inevo.encontra.descriptors.DescriptorExtractor;
 import pt.inevo.encontra.drawing.DrawingFactory;
 import pt.inevo.encontra.drawing.descriptors.TopogeoDescriptor;
@@ -17,15 +17,14 @@ import pt.inevo.encontra.image.descriptors.EdgeHistogramDescriptor;
 import pt.inevo.encontra.image.descriptors.FCTHDescriptor;
 import pt.inevo.encontra.index.IndexedObject;
 import pt.inevo.encontra.index.IndexedObjectFactory;
-import pt.inevo.encontra.index.IndexingException;
 import pt.inevo.encontra.index.annotation.Indexed;
 import pt.inevo.encontra.index.search.AbstractSearcher;
-import pt.inevo.encontra.index.search.Searcher;
 import pt.inevo.encontra.nbtree.index.BTreeIndex;
 import pt.inevo.encontra.nbtree.index.ParallelNBTreeSearcher;
 import pt.inevo.encontra.query.QueryParserNode;
 import pt.inevo.encontra.query.QueryProcessorDefaultImpl;
 import pt.inevo.encontra.query.QueryProcessorDefaultParallelImpl;
+import pt.inevo.encontra.query.operatorprocessors.SimilarOperatorProcessor;
 import pt.inevo.encontra.storage.IEntity;
 import pt.inevo.encontra.storage.IEntry;
 import pt.inevo.encontra.storage.JPAObjectStorage;
@@ -36,7 +35,6 @@ import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
 import java.awt.image.BufferedImage;
 import java.util.*;
-import java.util.logging.Level;
 
 public class WebAppEngine extends AbstractSearcher<DrawingModel> {
 
@@ -130,49 +128,56 @@ public class WebAppEngine extends AbstractSearcher<DrawingModel> {
             }
         }
 
-        @Override
+//        @Override
         protected ResultSet processSIMILAR(QueryParserNode node, boolean top) {
-            ResultSet result = new ResultSetDefaultImpl();
 
-            ImageModel objectModel = new ImageModel();
-            objectModel.setImage((BufferedImage) node.fieldObject);
+            ResultSet result = new SimilarOperatorProcessor().process(node);
 
-            List resultsParts = new ArrayList<ResultSetDefaultImpl<E>>();
-            List<IndexedObject> indexedObjects = null;
-            try {
-                indexedObjects = indexedObjectFactory.processBean(objectModel);
+//            return result;
 
-                for (IndexedObject obj : indexedObjects) {
-                    Searcher s = searcherMap.get(obj.getName());
-                    ResultSet res = s.search(createObjectSubQuery(node));
-                    resultsParts.add(res);
-                }
-
-                return combiner.join(resultsParts, node.distinct, node.limit, node.criteria);
-
-            } catch (IndexingException e) {
-                e.printStackTrace();
-            }
+//            ResultSet result = new ResultSetDefaultImpl();
+//
+//            ImageModel objectModel = new ImageModel();
+//            objectModel.setImage((BufferedImage) node.fieldObject);
+//
+//            List resultsParts = new ArrayList<ResultSetDefaultImpl<E>>();
+//            List<IndexedObject> indexedObjects = null;
+//            try {
+//                indexedObjects = getTopSearcher().getIndexedObjectFactory().processBean(objectModel);
+//
+//                for (IndexedObject obj : indexedObjects) {
+//                    Searcher s = searcherMap.get(obj.getName());
+//                    ResultSet res = s.search(createObjectSubQuery(node));
+//                    resultsParts.add(res);
+//                }
+//
+//                return getCombiner().join(resultsParts, node.distinct, node.limit, node.criteria);
+//
+//            } catch (IndexingException e) {
+//                e.printStackTrace();
+//            }
 
             return result;
         }
 
-        @Override
+//        @Override
         public boolean insert(E object) {
             ImageModel objectModel = new ImageModel();
             objectModel.setId((Long) object.getId());
             objectModel.setImage((BufferedImage) ((IndexedObject) object).getValue());
 
-            try {
-                List<IndexedObject> indexedObjects = indexedObjectFactory.processBean(objectModel);
-                for (IndexedObject obj : indexedObjects) {
-                    insertObject((E) obj);
-                }
-            } catch (IndexingException e) {
-                //log the exception and return false, because there was an error indexing the object.
-                logger.log(Level.SEVERE, "Could not insert the object. Possible reason " + e.getMessage());
-                return false;
-            }
+//            return insertObject(objectModel);
+
+//            try {
+//                List<IndexedObject> indexedObjects = getTopSearcher().getIndexedObjectFactory().processBean(objectModel);
+//                for (IndexedObject obj : indexedObjects) {
+//                    insertObject(obj);
+//                }
+//            } catch (IndexingException e) {
+//                //log the exception and return false, because there was an error indexing the object.
+//                logger.log(Level.SEVERE, "Could not insert the object. Possible reason " + e.getMessage());
+//                return false;
+//            }
             return true;
         }
     }
@@ -182,20 +187,20 @@ public class WebAppEngine extends AbstractSearcher<DrawingModel> {
         AbstractSearcher imageSearcher = new ImageSearchEngine();
         imageSearcher.setQueryProcessor(new ImageEngineQueryProcessor());
         imageSearcher.setResultProvider(new DefaultResultProvider());
-        imageSearcher.getQueryProcessor().setIndexedObjectFactory(new ImageIndexedObjectFactory());
+        imageSearcher.setIndexedObjectFactory(new ImageIndexedObjectFactory());
 
         Set<Map.Entry<String, DescriptorExtractor>> entries = extractors.entrySet();
         for (Map.Entry<String, DescriptorExtractor> entry : entries) {
             AbstractSearcher entrySearcher = new ParallelNBTreeSearcher();
             entrySearcher.setQueryProcessor(new QueryProcessorDefaultParallelImpl());
             entrySearcher.setResultProvider(new DefaultResultProvider());
-            entrySearcher.setIndex(new BTreeIndex(CommonInfo.CONFIG_FILE_INDEX_PATH, "image." + entry.getKey() + "DBTree", TopogeoDescriptor.class));
+            entrySearcher.setIndex(new BTreeIndex(CommonInfo.CONFIG_FILE_INDEX_PATH, "image." + entry.getKey() + "DBTree", Descriptor.class));
             entrySearcher.setDescriptorExtractor(entry.getValue());
 
-            imageSearcher.getQueryProcessor().setSearcher("image." + entry.getKey(), entrySearcher);
+            imageSearcher.setSearcher("image." + entry.getKey(), entrySearcher);
         }
 
-        getQueryProcessor().setSearcher("image", imageSearcher);
+        setSearcher("image", imageSearcher);
 
         //A searcher for the vectorial content (using the selected descriptors)
         AbstractSearcher vectorialSearcher = new ParallelNBTreeSearcher();
@@ -205,7 +210,7 @@ public class WebAppEngine extends AbstractSearcher<DrawingModel> {
 
         TopogeoDescriptorExtractor topogeoDescriptorExtractor = new TopogeoDescriptorExtractor();
         vectorialSearcher.setDescriptorExtractor(topogeoDescriptorExtractor);
-        getQueryProcessor().setSearcher("drawing", vectorialSearcher);
+        setSearcher("drawing", vectorialSearcher);
     }
 
     /**
@@ -214,7 +219,7 @@ public class WebAppEngine extends AbstractSearcher<DrawingModel> {
     private void setupEngine() {
         setObjectStorage(new DrawingStorage());
         setQueryProcessor(new QueryProcessorDefaultImpl());
-        getQueryProcessor().setIndexedObjectFactory(new SimpleIndexedObjectFactory());
+        setIndexedObjectFactory(new SimpleIndexedObjectFactory());
         getQueryProcessor().setTopSearcher(this);
         setResultProvider(new DefaultResultProvider());
     }
