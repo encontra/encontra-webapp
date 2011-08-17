@@ -371,7 +371,7 @@ public class EnContRAApplication extends Application {
                 resultImages.clear();
                 for (Result<DrawingModel> r : results) {
 
-                    System.out.println("Result Id:" + r.getResultObject().getId());
+                    System.out.println("Result Id:" + r.getResultObject().getId() + ", distance:" + r.getScore());
 
                     File tmpFile = File.createTempFile("tempFile" + r.getResultObject().getId(), ".png");
                     String filename = tmpFile.getAbsolutePath();
@@ -642,9 +642,16 @@ public class EnContRAApplication extends Application {
 
     //creates and performs a knn query to the engine
     private ResultSet<DrawingModel> knnQuery(File file) throws IOException {
+
+        int mid = file.getName().lastIndexOf(".");
+        String ext = file.getName().substring(mid+1,file.getName().length());
+
         System.out.println("Creating a knn query...");
 //        BufferedImage image = ImageIO.read(file);
-        Drawing drawing = DrawingFactory.getInstance().drawingFromSVG(file.getAbsolutePath());
+        Drawing drawing = null;
+        if (ext.equals("svg")) {
+            drawing = DrawingFactory.getInstance().drawingFromSVG(file.getAbsolutePath());
+        }
 
         //Creating a combined query for the results
         CriteriaBuilderImpl cb = new CriteriaBuilderImpl();
@@ -671,7 +678,11 @@ public class EnContRAApplication extends Application {
 
         BufferedImage img = null;
         try {
-            img = drawing.getImage();
+            if (drawing != null)
+                img = drawing.getImage();
+            else {
+                img = ImageIO.read(file);
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -682,10 +693,10 @@ public class EnContRAApplication extends Application {
                 cb.and(cb.similar(imagePath, img)), cb.similar(drawingPath, drawing)).distinct(true).limit(20);
         } else if (imageCheckbox.booleanValue()) {
             query = cb.createQuery().where(
-                cb.similar(imagePath, img)).distinct(true).limit(10);
+                cb.similar(imagePath, img)).distinct(true).limit(20);
         } else if (vectorialCheckbox.booleanValue()) {
             query = cb.createQuery().where(
-                cb.similar(drawingPath, drawing)).distinct(true).limit(10);
+                cb.similar(drawingPath, drawing)).distinct(true).limit(20);
         } else {
             main.showNotification("You must select at least a query type!",
                     Notification.TYPE_ERROR_MESSAGE);
