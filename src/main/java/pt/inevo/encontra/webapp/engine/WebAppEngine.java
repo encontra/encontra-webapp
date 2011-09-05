@@ -98,7 +98,8 @@ public class WebAppEngine extends AbstractSearcher<DrawingModel> {
                 subExpressions.add(cb.similar(searcher.getKey(), node.fieldObject));
             }
 
-            return super.search(q.where(cb.or(subExpressions.toArray(new Predicate[]{}))).distinct(((CriteriaQuery) query).isDistinct()).limit(((CriteriaQuery) query).getLimit()));
+            ResultSet results = super.search(q.where(cb.or(subExpressions.toArray(new Predicate[]{}))).distinct(((CriteriaQuery) query).isDistinct()).limit(((CriteriaQuery) query).getLimit()));
+            return results;
         }
 
         @Override

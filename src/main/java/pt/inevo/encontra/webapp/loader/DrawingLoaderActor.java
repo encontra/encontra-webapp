@@ -32,9 +32,10 @@ public class DrawingLoaderActor extends UntypedActor {
         this.e = searcher;
     }
 
-    public DrawingLoaderActor(DrawingModelLoader loader) {
+    public DrawingLoaderActor(DrawingModelLoader loader, Searcher searcher) {
         this();
         this.loader = loader;
+        this.e = searcher;
     }
 
     @Override
@@ -49,7 +50,7 @@ public class DrawingLoaderActor extends UntypedActor {
 
                         @Override
                         public UntypedActor create() {
-                            return new DrawingLoaderActor(loader);
+                            return new DrawingLoaderActor(loader, e);
                         }
                     }).start();
                     producers.add(actor);
@@ -72,12 +73,24 @@ public class DrawingLoaderActor extends UntypedActor {
                 File f = (File) message.obj;
                 DrawingModel model = loader.loadImage(f);
 
+//                e.insert(model);
+////                indexed++;
+//                log.info("Drawing " + model.getFilename() + " successfully indexed!");
+//                model.setImage(null);
+//                model.setDrawing(null);
+//
+////                if ((indexed % 10) == 0) {
+////                    Runtime r = Runtime.getRuntime();
+////                    r.gc();
+////                }
+
                 Message answer = new Message();
                 answer.operation = "ANSWER";
                 answer.obj = model;
                 getContext().replySafe(answer);
             } else if (message.operation.equals("ANSWER")) {
                 DrawingModel model = (DrawingModel) message.obj;
+                indexed++;
                 if (model != null) {    //save the object
                     try {
                         e.insert(model);

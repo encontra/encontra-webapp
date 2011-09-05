@@ -45,6 +45,7 @@ import pt.inevo.encontra.geometry.PolygonSet;
 import pt.inevo.encontra.query.CriteriaQuery;
 import pt.inevo.encontra.query.Path;
 import pt.inevo.encontra.query.criteria.CriteriaBuilderImpl;
+import pt.inevo.encontra.query.criteria.Expression;
 import pt.inevo.encontra.service.PolygonDetectionService;
 import pt.inevo.encontra.service.impl.PolygonDetectionServiceImpl;
 import pt.inevo.encontra.webapp.engine.WebAppEngine;
@@ -689,8 +690,8 @@ public class EnContRAApplication extends Application {
 
         CriteriaQuery query = null;
         if (imageCheckbox.booleanValue() && vectorialCheckbox.booleanValue())  {
-            query = cb.createQuery().where(
-                cb.and(cb.similar(imagePath, img)), cb.similar(drawingPath, drawing)).distinct(true).limit(20);
+            query = cb.createQuery().where( (Expression)
+                (cb.or(cb.similar(imagePath, img), cb.similar(drawingPath, drawing)))).distinct(true).limit(20);
         } else if (imageCheckbox.booleanValue()) {
             query = cb.createQuery().where(
                 cb.similar(imagePath, img)).distinct(true).limit(20);
