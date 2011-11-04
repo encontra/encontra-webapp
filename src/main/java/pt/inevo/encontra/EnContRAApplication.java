@@ -26,9 +26,9 @@ import com.vaadin.data.Property;
 import com.vaadin.data.Property.ValueChangeEvent;
 import com.vaadin.terminal.FileResource;
 import com.vaadin.ui.AbstractSelect.Filtering;
-import com.vaadin.ui.*;
 import com.vaadin.ui.Button;
 import com.vaadin.ui.Button.ClickEvent;
+import com.vaadin.ui.*;
 import com.vaadin.ui.Label;
 import com.vaadin.ui.TextField;
 import com.vaadin.ui.Window;
@@ -45,7 +45,7 @@ import pt.inevo.encontra.geometry.PolygonSet;
 import pt.inevo.encontra.query.CriteriaQuery;
 import pt.inevo.encontra.query.Path;
 import pt.inevo.encontra.query.criteria.CriteriaBuilderImpl;
-import pt.inevo.encontra.query.criteria.Expression;
+import pt.inevo.encontra.query.criteria.StorageCriteria;
 import pt.inevo.encontra.service.PolygonDetectionService;
 import pt.inevo.encontra.service.impl.PolygonDetectionServiceImpl;
 import pt.inevo.encontra.webapp.engine.WebAppEngine;
@@ -60,6 +60,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.util.*;
+import java.util.List;
 import java.util.logging.Logger;
 
 public class EnContRAApplication extends Application {
@@ -72,7 +73,7 @@ public class EnContRAApplication extends Application {
     private ComboBox indexSelector = new ComboBox();
     private TextField keywords;
     private com.vaadin.ui.Label logViewer = new com.vaadin.ui.Label();
-    private HashMap<CheckBox, Slider> descriptorsUI = new HashMap<CheckBox, Slider>();
+    private HashMap<CheckBox, CheckBox> descriptorsUI = new HashMap<CheckBox, CheckBox>();
     private HashMap<ImageStrip.Image, DrawingModel> resultImages = new HashMap<ImageStrip.Image, DrawingModel>();
     final Map<String, String> databases = new HashMap<String, String>();
     private static Properties props = new Properties();
@@ -157,14 +158,14 @@ public class EnContRAApplication extends Application {
 
         configLayout.addComponent(databaseSelector);
 
-        indexSelector.setCaption("Choose the desired index:");
-        indexSelector.addItem("Btree Index");
-        indexSelector.addItem("Lucene Index");
-        indexSelector.addItem("Simple Index");
-        indexSelector.setFilteringMode(Filtering.FILTERINGMODE_OFF);
-        indexSelector.setImmediate(true);
-
-        configLayout.addComponent(indexSelector);
+//        indexSelector.setCaption("Choose the desired index:");
+//        indexSelector.addItem("Btree Index");
+//        indexSelector.addItem("Lucene Index");
+//        indexSelector.addItem("Simple Index");
+//        indexSelector.setFilteringMode(Filtering.FILTERINGMODE_OFF);
+//        indexSelector.setImmediate(true);
+//
+//        configLayout.addComponent(indexSelector);
 
         configLayout.addComponent(new com.vaadin.ui.Label("Choose the descriptors to be used:"));
 
@@ -179,33 +180,34 @@ public class EnContRAApplication extends Application {
 
                 public void buttonClick(ClickEvent event) {
                     boolean enabled = event.getButton().booleanValue();
-                    Slider s = descriptorsUI.get(event.getButton());
-                    s.setEnabled(enabled);
+//                    Slider s = descriptorsUI.get(event.getButton());
+//                    s.setEnabled(enabled);
                 }
             });
 
-            final Slider slider = new Slider("Weight");
-            slider.setWidth(100, Slider.UNITS_PIXELS);
-            slider.setMin(0);
-            slider.setMax(100);
-            try {
-                slider.setValue(100.0);
-            } catch (Slider.ValueOutOfBoundsException ex) {
-                ex.printStackTrace();
-            }
-            slider.setImmediate(true);
-            slider.setEnabled(false);
-
+//            final Slider slider = new Slider("Weight");
+//            slider.setWidth(100, Slider.UNITS_PIXELS);
+//            slider.setMin(0);
+//            slider.setMax(100);
+//            try {
+//                slider.setValue(100.0);
+//            } catch (Slider.ValueOutOfBoundsException ex) {
+//                ex.printStackTrace();
+//            }
+//            slider.setImmediate(true);
+//            slider.setEnabled(false);
+//
             hl.addComponent(cb);
-            hl.addComponent(slider);
-            hl.setComponentAlignment(slider, Alignment.TOP_CENTER);
+//            hl.addComponent(slider);
+//            hl.setComponentAlignment(slider, Alignment.TOP_CENTER);
 
-            descriptorsUI.put(cb, slider);
+//            descriptorsUI.put(cb, slider);
+            descriptorsUI.put(cb, cb);
 
             configLayout.addComponent(hl);
         }
 
-        Button applyNewConfiguration = new Button("Apply");
+        Button applyNewConfiguration = new Button("Index");
         applyNewConfiguration.setImmediate(true);
         applyNewConfiguration.addListener(new Button.ClickListener() {
 
@@ -215,7 +217,18 @@ public class EnContRAApplication extends Application {
             }
         });
 
+        Button updateSearchDescriptors = new Button("Update Descriptors");
+        updateSearchDescriptors.setImmediate(true);
+        updateSearchDescriptors.addListener(new Button.ClickListener() {
+
+            public void buttonClick(ClickEvent event) {
+
+                setupEngine(false);
+            }
+        });
+
         configLayout.addComponent(applyNewConfiguration);
+        configLayout.addComponent(updateSearchDescriptors);
 
         final VerticalLayout vr = new VerticalLayout();
         vr.setSpacing(true);
@@ -433,8 +446,8 @@ public class EnContRAApplication extends Application {
     }
 
     private void setupEngine(boolean load) {
-        if (indexSelector.getValue() == null || databaseSelector.getValue() == null) {
-            main.showNotification("You must select a database, an index to be used and at least one descriptor type.",
+        if (databaseSelector.getValue() == null) {
+            main.showNotification("You must select a database to be used.",
                     Notification.TYPE_ERROR_MESSAGE);
             return;
         }
@@ -443,6 +456,27 @@ public class EnContRAApplication extends Application {
 
         System.out.println("Configuring the Retrieval Engine...");
 
+        List<String> descriptors = new ArrayList<String>();
+        Set<Map.Entry<CheckBox, CheckBox>> features = descriptorsUI.entrySet();
+        for (Map.Entry<CheckBox, CheckBox> pair : features) {
+            if (pair.getKey().getCaption().contains("CEDD") && pair.getKey().booleanValue()) {
+                descriptors.add("CEDD");
+            } else if (pair.getKey().getCaption().contains("ColorLayout") && pair.getKey().booleanValue()) {
+                descriptors.add("ColorLayout");
+            } else if (pair.getKey().getCaption().contains("Dominant Color") && pair.getKey().booleanValue()) {
+                descriptors.add("DominantColor");
+            } else if (pair.getKey().getCaption().contains("EdgeHistogram") && pair.getKey().booleanValue()) {
+                descriptors.add("EdgeHistogram");
+            } else if (pair.getKey().getCaption().contains("FCTH") && pair.getKey().booleanValue()) {
+                descriptors.add("FCTH");
+            } else if (pair.getKey().getCaption().contains("Scalable Color") && pair.getKey().booleanValue()) {
+                descriptors.add("ScalableColor");
+            } else if (pair.getKey().getCaption().contains("Topogeo") && pair.getKey().booleanValue()) {
+                descriptors.add("Topogeo");
+            }
+        }
+        //setting the active descriptor extractors and the correspondent searchers
+        e.setActiveExtractors(descriptors);
 
 //        storage = new DrawingStorage(loadCmisConfig());
 //        storage = new DrawingStorage();
@@ -532,7 +566,7 @@ public class EnContRAApplication extends Application {
             load(databases.get(databaseSelector.getValue()));
 
         System.out.println("End of the loading phase...");
-        main.showNotification("Database loading sucessfully finished!");
+        main.showNotification("Engine setup completed!");
     }
 
     //load configuration file
@@ -648,7 +682,8 @@ public class EnContRAApplication extends Application {
         String ext = file.getName().substring(mid+1,file.getName().length());
 
         System.out.println("Creating a knn query...");
-//        BufferedImage image = ImageIO.read(file);
+
+        //detect if it is a svg file (native drawing, and try to read it properly)
         Drawing drawing = null;
         if (ext.equals("svg")) {
             drawing = DrawingFactory.getInstance().drawingFromSVG(file.getAbsolutePath());
@@ -663,20 +698,19 @@ public class EnContRAApplication extends Application {
         Path drawingPath = model.get("drawing");
         Path imagePath = model.get("image");
 
-//        String storageQuery = "";
-//        String keywordsStr = keywords.getValue().toString();
-//        if (!keywordsStr.equals("")) {
-//            String [] keywordsSplit = keywordsStr.split(",");
-//            for (int i = 0; i < keywordsSplit.length ; i++) {
-//                storageQuery += "cmis:contentStreamFileName like '%" + keywordsSplit[i].toLowerCase() + "%' ";
-//                if (i+1 < keywordsSplit.length)
-//                    storageQuery += "and ";
-//            }
-//        }
+        String storageQuery = "";
+        String keywordsStr = keywords.getValue().toString();
+        if (!keywordsStr.equals("")) {
+            String [] keywordsSplit = keywordsStr.split(",");
+            for (int i = 0; i < keywordsSplit.length ; i++) {
+                storageQuery += "filename like '%" + keywordsSplit[i].toLowerCase() + "%' ";
+                if (i+1 < keywordsSplit.length)
+                    storageQuery += "and ";
+            }
+        }
 
-//        CriteriaQuery query = cb.createQuery().where(
-//                cb.similar(drawingPath, drawing)).distinct(true).limit(10);
 
+        //try to read the image if it was not a native drawing (svg file)
         BufferedImage img = null;
         try {
             if (drawing != null)
@@ -690,8 +724,8 @@ public class EnContRAApplication extends Application {
 
         CriteriaQuery query = null;
         if (imageCheckbox.booleanValue() && vectorialCheckbox.booleanValue())  {
-            query = cb.createQuery().where( (Expression)
-                (cb.or(cb.similar(imagePath, img), cb.similar(drawingPath, drawing)))).distinct(true).limit(20);
+            query = cb.createQuery().where(
+               cb.or(cb.similar(imagePath, img), cb.similar(drawingPath, drawing))).distinct(true).limit(20);
         } else if (imageCheckbox.booleanValue()) {
             query = cb.createQuery().where(
                 cb.similar(imagePath, img)).distinct(true).limit(20);
@@ -705,9 +739,9 @@ public class EnContRAApplication extends Application {
         }
 //
         ResultSet<DrawingModel> results = null;
-//        if (!keywordsStr.equals("")) {
-//            query.setCriteria(new StorageCriteria(storageQuery));
-//        }
+        if (!keywordsStr.equals("")) {
+            query.setCriteria(new StorageCriteria(storageQuery));
+        }
 
         results = e.search(query);
         System.out.println("...done! Query returned: " + results.getSize() + " results.");

@@ -7,6 +7,8 @@ import pt.inevo.encontra.drawing.Drawing;
 import pt.inevo.encontra.drawing.DrawingFactory;
 import pt.inevo.encontra.util.FileUtil;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
@@ -52,8 +54,13 @@ public class DrawingModelLoader {
             im.setDrawing(drawing);
             im.setImage(drawing.getImage());
         } catch (IOException ex) {
-            logger.error("Couldn't load the drawing: " + image.getName() + ".");
-            return null;
+            try {
+                BufferedImage picture = ImageIO.read(image);
+                im.setImage(picture);
+            } catch (IOException e) {
+                logger.error("Couldn't load the picture: " + image.getName() + ". Try again later!");
+            }
+
         }
 
         logger.info("Drawing " + image.getName() + " successfully loaded.");

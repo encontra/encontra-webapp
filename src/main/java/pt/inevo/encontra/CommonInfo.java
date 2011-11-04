@@ -1,5 +1,7 @@
 package pt.inevo.encontra;
 
+import pt.inevo.encontra.util.Util;
+
 /**
  * Common properties to be used in the EnContRA Web-application
  */
@@ -19,7 +21,7 @@ public class CommonInfo {
 
     public final static String [] FILE_TYPES_VECTORIAL = {"svg"};
     public final static String [] FILE_TYPES_IMAGE = {"png", "jpg"};
-    public final static String [] FILE_TYPES = FILE_TYPES_VECTORIAL;
+    public final static String [] FILE_TYPES = Util.concat(FILE_TYPES_IMAGE, FILE_TYPES_VECTORIAL);
 
     public final static String EMPTY_PATH = "";
 }

@@ -5,10 +5,12 @@ import pt.inevo.encontra.drawing.DrawingFactory;
 import pt.inevo.encontra.index.annotation.Indexed;
 import pt.inevo.encontra.storage.IEntity;
 
+import javax.imageio.ImageIO;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Transient;
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.IOException;
 
 /**
@@ -94,7 +96,12 @@ public class DrawingModel implements IEntity<Long> {
         if (image == null) {
             Drawing d = getDrawing();
             try {
-                image = d.getImage();
+                if (d != null) {
+                    image = d.getImage();
+                }
+                else {
+                    image = ImageIO.read(new File(this.filename));
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             }

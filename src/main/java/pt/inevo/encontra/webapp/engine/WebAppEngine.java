@@ -10,10 +10,7 @@ import pt.inevo.encontra.drawing.descriptors.TopogeoDescriptor;
 import pt.inevo.encontra.drawing.descriptors.TopogeoDescriptorExtractor;
 import pt.inevo.encontra.engine.AnnotatedIndexedObjectFactory;
 import pt.inevo.encontra.engine.SimpleIndexedObjectFactory;
-import pt.inevo.encontra.image.descriptors.CEDDDescriptor;
-import pt.inevo.encontra.image.descriptors.DominantColorDescriptor;
-import pt.inevo.encontra.image.descriptors.EdgeHistogramDescriptor;
-import pt.inevo.encontra.image.descriptors.FCTHDescriptor;
+import pt.inevo.encontra.image.descriptors.*;
 import pt.inevo.encontra.index.IndexedObject;
 import pt.inevo.encontra.index.IndexedObjectFactory;
 import pt.inevo.encontra.index.IndexingException;
@@ -35,14 +32,22 @@ import java.util.*;
 
 public class WebAppEngine extends AbstractSearcher<DrawingModel> {
 
-    private static Map<String, DescriptorExtractor> extractors;
+    private static Map<String, DescriptorExtractor> availableExtractors;
+    private static Map<String, DescriptorExtractor> activeExtractors;
+    private static Map<String, Searcher> activeSearchers;
 
     static {
-        extractors = new HashMap<String, DescriptorExtractor>();
-        extractors.put("CEDD", new CEDDDescriptor<IndexedObject>());
-        extractors.put("DominantColor", new DominantColorDescriptor<IndexedObject>());
-        extractors.put("EdgeHistogram", new EdgeHistogramDescriptor<IndexedObject>());
-        extractors.put("FCTH", new FCTHDescriptor<IndexedObject>());
+        //initializing the required structures
+        activeExtractors = new HashMap<String, DescriptorExtractor>();
+        availableExtractors = new HashMap<String, DescriptorExtractor>();
+        activeSearchers = new HashMap<String, Searcher>();
+
+        availableExtractors.put("CEDD", new CEDDDescriptor<IndexedObject>());
+        availableExtractors.put("DominantColor", new DominantColorDescriptor<IndexedObject>());
+        availableExtractors.put("EdgeHistogram", new EdgeHistogramDescriptor<IndexedObject>());
+        availableExtractors.put("FCTH", new FCTHDescriptor<IndexedObject>());
+        availableExtractors.put("ScalableColor", new ScalableColorDescriptor<IndexedObject>());
+        availableExtractors.put("ColorLayout", new ColorLayoutDescriptor<IndexedObject>());
     }
 
     /**
@@ -76,7 +81,7 @@ public class WebAppEngine extends AbstractSearcher<DrawingModel> {
             List<IndexedObject> idxObjects = new ArrayList<IndexedObject>();
             if (o instanceof IndexedObject) {
                 IndexedObject obj = (IndexedObject) o;
-                for (Map.Entry<String, Searcher> searcher : searcherMap.entrySet()) {
+                for (Map.Entry<String, Searcher> searcher : activeSearchers.entrySet()) {
                     idxObjects.add(new IndexedObject(obj.getId(), searcher.getKey(), obj.getValue(), obj.getBoost()));
                 }
             } else {
@@ -92,7 +97,7 @@ public class WebAppEngine extends AbstractSearcher<DrawingModel> {
             CriteriaQuery q = cb.createQuery();
 
             QueryParserNode node = queryProcessor.getQueryParser().parse(query);
-            Set<Map.Entry<String, Searcher>> searchers = searcherMap.entrySet();
+            Set<Map.Entry<String, Searcher>> searchers = activeSearchers.entrySet();
             List<Predicate> subExpressions = new ArrayList<Predicate>();
             for (Map.Entry<String, Searcher> searcher : searchers) {
                 subExpressions.add(cb.similar(searcher.getKey(), node.fieldObject));
@@ -118,7 +123,7 @@ public class WebAppEngine extends AbstractSearcher<DrawingModel> {
                 if (!field.name.equals("image")) {
                     result.add(new IndexedObject(field.id, field.name, field.object, field.boost));
                 } else {
-                    Set<Map.Entry<String, DescriptorExtractor>> entries = extractors.entrySet();
+                    Set<Map.Entry<String, DescriptorExtractor>> entries = activeExtractors.entrySet();
                     for (Map.Entry<String, DescriptorExtractor> entry : entries) {
                         result.add(new IndexedObject(field.id, field.name + "." + entry.getKey(), field.object, field.boost));
                     }
@@ -135,7 +140,7 @@ public class WebAppEngine extends AbstractSearcher<DrawingModel> {
         imageSearcher.setResultProvider(new DefaultResultProvider());
         imageSearcher.setIndexedObjectFactory(new ImageIndexedObjectFactory());
 
-        Set<Map.Entry<String, DescriptorExtractor>> entries = extractors.entrySet();
+        Set<Map.Entry<String, DescriptorExtractor>> entries = availableExtractors.entrySet();
         for (Map.Entry<String, DescriptorExtractor> entry : entries) {
             AbstractSearcher entrySearcher = new ParallelNBTreeSearcher();
             entrySearcher.setQueryProcessor(new QueryProcessorDefaultParallelImpl());
@@ -168,6 +173,23 @@ public class WebAppEngine extends AbstractSearcher<DrawingModel> {
         setIndexedObjectFactory(new SimpleIndexedObjectFactory());
         getQueryProcessor().setTopSearcher(this);
         setResultProvider(new DefaultResultProvider());
+    }
+
+    /**
+     * Sets the active descriptor extractors, by using the name of the descriptors.
+     * @param extractors
+     */
+    public void setActiveExtractors(List<String> extractors) {
+        //first clears the descriptor extractors
+        activeExtractors.clear();
+        activeSearchers.clear();
+        //then adds the extractors to the active list, but also updates the active Searchers
+        for (String extractorName: extractors) {
+            activeExtractors.put(extractorName, availableExtractors.get(extractorName));
+            if (!extractorName.equals("Topogeo"))
+                activeSearchers.put("image." + extractorName, searcherMap.get("image." + extractorName));
+            else activeSearchers.put("drawing", searcherMap.get("drawing"));
+        }
     }
 
     @Override
